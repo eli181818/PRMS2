@@ -123,4 +123,181 @@ class QueueEntry(models.Model):
             count_today = QueueEntry.objects.filter(entered_at__date=today).count() + 1
             self.queue_number = f"Q{count_today:03d}"
         super().save(*args, **kwargs)
+        
+              
+class ArchivedPatient(models.Model):
+    patient_id = models.CharField(max_length=15, primary_key=True)
+    first_name = models.CharField(max_length=50)
+    middle_initial = models.CharField(max_length=50, null=True, blank=True)
+    last_name = models.CharField(max_length=50)
+    sex = models.CharField(max_length=6)
+    contact = models.CharField(max_length=11)
+    address = models.TextField(max_length=300)
+    username = models.CharField(max_length=20, null=True, blank=True)
+    birthdate = models.DateField(null=True, blank=True)
+    pin = models.CharField(max_length=255)
+    fingerprint_id = models.CharField(max_length=4, null=True, blank=True)
+    last_visit = models.DateTimeField(null=True, blank=True)
+    
+    # Archive metadata
+    archived_at = models.DateTimeField(auto_now_add=True)
+    archived_by = models.ForeignKey(HCStaff, on_delete=models.SET_NULL, null=True)
+    archive_reason = models.TextField(null=True, blank=True)
+    original_created_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'archived_patient'
+        verbose_name = 'Archived Patient'
 
+class ArchivedVitalSigns(models.Model):
+    # Link to archived patient
+    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='vital_signs')
+    
+    # Copy all VitalSigns fields
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    date_time_recorded = models.DateTimeField()
+    heart_rate = models.IntegerField(null=True, blank=True)
+    temperature = models.FloatField(null=True, blank=True)
+    oxygen_saturation = models.FloatField(null=True, blank=True)
+    blood_pressure = models.IntegerField(null=True, blank=True)
+    height = models.FloatField(null=True, blank=True)
+    weight = models.FloatField(null=True, blank=True)
+    bmi = models.FloatField(null=True, blank=True)
+    
+    # Archive metadata
+    archived_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'archived_vital_signs'
+
+class ArchivedQueueEntry(models.Model):
+    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='queue_entries')
+    
+    priority = models.CharField(max_length=10)
+    entered_at = models.DateTimeField()
+    queue_number = models.CharField(max_length=10)
+    
+    # Archive metadata
+    archived_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'archived_queue_entry'
+
+# In models.py or utils.py
+from django.db import transaction
+
+@transaction.atomic
+def archive_patient(patient_id, staff=None, reason=None):
+    """
+    Archive a patient and all their related records.
+    This moves data from active tables to archive tables.
+    """
+    try:
+        # Get the patient
+        patient = Patient.objects.get(patient_id=patient_id)
+        
+        # Create archived patient record
+        archived_patient = ArchivedPatient.objects.create(
+            patient_id=patient.patient_id,
+            first_name=patient.first_name,
+            middle_initial=patient.middle_initial,
+            last_name=patient.last_name,
+            sex=patient.sex,
+            contact=patient.contact,
+            address=patient.address,
+            username=patient.username,
+            birthdate=patient.birthdate,
+            pin=patient.pin,
+            fingerprint_id=patient.fingerprint_id,
+            last_visit=patient.last_visit,
+            archived_by=staff,
+            archive_reason=reason,
+            original_created_at=timezone.now(),  # Or track actual creation date
+        )
+        
+        # Archive all vital signs
+        vitals = VitalSigns.objects.filter(patient=patient)
+        for vital in vitals:
+            ArchivedVitalSigns.objects.create(
+                patient=archived_patient,
+                device_id=vital.device_id,
+                date_time_recorded=vital.date_time_recorded,
+                heart_rate=vital.heart_rate,
+                temperature=vital.temperature,
+                oxygen_saturation=vital.oxygen_saturation,
+                blood_pressure=vital.blood_pressure,
+                height=vital.height,
+                weight=vital.weight,
+                bmi=vital.bmi,
+            )
+        
+        # Archive queue entries
+        queue_entries = QueueEntry.objects.filter(patient=patient)
+        for entry in queue_entries:
+            ArchivedQueueEntry.objects.create(
+                patient=archived_patient,
+                priority=entry.priority,
+                entered_at=entry.entered_at,
+                queue_number=entry.queue_number,
+            )
+        
+        # 5. Delete from active tables (CASCADE will delete related records)
+        patient.delete()
+        
+        return True, f"Patient {patient_id} archived successfully"
+        
+    except Patient.DoesNotExist:
+        return False, f"Patient {patient_id} not found"
+    except Exception as e:
+        return False, f"Error archiving patient: {str(e)}"
+
+
+@transaction.atomic
+def restore_patient(patient_id):
+    """
+    Restore an archived patient back to active tables.
+    """
+    try:
+        # 1. Get archived patient
+        archived_patient = ArchivedPatient.objects.get(patient_id=patient_id)
+        
+        # 2. Restore to Patient table
+        patient = Patient.objects.create(
+            patient_id=archived_patient.patient_id,
+            first_name=archived_patient.first_name,
+            middle_initial=archived_patient.middle_initial,
+            last_name=archived_patient.last_name,
+            sex=archived_patient.sex,
+            contact=archived_patient.contact,
+            address=archived_patient.address,
+            username=archived_patient.username,
+            birthdate=archived_patient.birthdate,
+            pin=archived_patient.pin,
+            fingerprint_id=archived_patient.fingerprint_id,
+            last_visit=archived_patient.last_visit,
+        )
+        
+        # 3. Restore vital signs
+        archived_vitals = ArchivedVitalSigns.objects.filter(patient=archived_patient)
+        for vital in archived_vitals:
+            VitalSigns.objects.create(
+                patient=patient,
+                device_id=vital.device_id,
+                heart_rate=vital.heart_rate,
+                temperature=vital.temperature,
+                oxygen_saturation=vital.oxygen_saturation,
+                blood_pressure=vital.blood_pressure,
+                height=vital.height,
+                weight=vital.weight,
+                bmi=vital.bmi,
+            )
+        
+        # 4. Delete from archive
+        archived_patient.delete()
+        
+        return True, f"Patient {patient_id} restored successfully"
+        
+    except ArchivedPatient.DoesNotExist:
+        return False, f"Archived patient {patient_id} not found"
+    except Exception as e:
+        return False, f"Error restoring patient: {str(e)}"

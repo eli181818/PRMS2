@@ -3,7 +3,8 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
-from .models import Patient, VitalSigns, HCStaff, QueueEntry
+from .models import Patient, VitalSigns, HCStaff, QueueEntry, ArchivedPatient, ArchivedVitalSigns, ArchivedQueueEntry
+from .models import archive_patient, restore_patient
 from .serializers import PatientSerializer, VitalSignsSerializer, QueueEntrySerializer 
 from django.db.models import Q, Case, When, IntegerField, Max  # For queue sorting
 from django.utils import timezone  
@@ -576,4 +577,45 @@ class QueueViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(queue, many=True)
         return Response(serializer.data)
+
+@api_view(['POST'])
+def archive_patient_view(request, patient_id):
+    """Archive a patient and all their records"""
+    staff = None  # Get from session if needed
+    reason = request.data.get('reason', 'No reason provided')
+    
+    success, message = archive_patient(patient_id, staff, reason)
+    
+    if success:
+        return Response({"message": message}, status=status.HTTP_200_OK)
+    else:
+        return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+def restore_patient_view(request, patient_id):
+    """Restore an archived patient"""
+    success, message = restore_patient(patient_id)
+    
+    if success:
+        return Response({"message": message}, status=status.HTTP_200_OK)
+    else:
+        return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+def get_archived_patients(request):
+    """Get list of archived patients"""
+    archived = ArchivedPatient.objects.all().order_by('-archived_at')
+    
+    data = [{
+        'patient_id': p.patient_id,
+        'name': f"{p.first_name} {p.last_name}",
+        'archived_at': p.archived_at,
+        'archived_by': p.archived_by.name if p.archived_by else None,
+        'archive_reason': p.archive_reason,
+    } for p in archived]
+    
+    return Response(data)
+
  
