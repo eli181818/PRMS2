@@ -11,6 +11,7 @@ from django.utils import timezone
 from .utils import compute_patient_priority
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
+from django.contrib.auth.hashers import check_password
 
 
 # Create your views here.
@@ -195,35 +196,43 @@ def test_rpi_connection(request):
 
 @csrf_exempt
 @api_view(['POST'])
+@api_view(["POST"])
 def login(request):
     pin = request.data.get("pin")
     login_type = request.data.get("login_type")  # 'staff' or 'patient'
     username = request.data.get("username")  # For patient login
-    
+
     if not pin:
         return Response({"error": "PIN required"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     pin = str(pin).strip()
     
-    # Staff login
-    if login_type == 'staff':
+    if login_type == "staff":
         try:
-            staff = HCStaff.objects.get(staff_pin=pin)
-            
+            # Get all staff and check hashed PINs one by one
+            staff_member = None
+            for s in HCStaff.objects.all():
+                if s.staff_pin and check_password(pin, s.staff_pin):
+                    staff_member = s
+                    break
+
+            if not staff_member:
+                return Response({"error": "Invalid staff PIN"}, status=status.HTTP_401_UNAUTHORIZED)
+
             # CREATE SESSION (server-side)
-            request.session['user_id'] = staff.id
-            request.session['user_type'] = 'staff'
-            request.session['name'] = staff.name
-            
+            request.session["user_id"] = staff_member.id
+            request.session["user_type"] = "staff"
+            request.session["name"] = staff_member.name
+
             return Response({
                 "role": "staff",
-                "name": staff.name
+                "name": staff_member.name,
+                "staff_id": staff_member.staff_id if hasattr(staff_member, 'staff_id') else staff_member.id
             })
-            
-        except HCStaff.DoesNotExist:
-            return Response({"error": "Invalid staff PIN"}, status=status.HTTP_401_UNAUTHORIZED)
-    
-    # Patient login (requires both username and PIN)
+
+        except Exception as e:
+            return Response({"error": f"Login failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+        
     elif login_type == 'patient':
         if not username:
             return Response({"error": "Username required for patient login"}, status=status.HTTP_400_BAD_REQUEST)

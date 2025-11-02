@@ -2,6 +2,7 @@ from .models import Patient, QueueEntry, VitalSigns
 from rest_framework import serializers
 import re 
 from datetime import date
+from django.contrib.auth.hashers import make_password
 
 class PatientSerializer(serializers.ModelSerializer):
     age = serializers.IntegerField(read_only=True)
@@ -21,9 +22,31 @@ class PatientSerializer(serializers.ModelSerializer):
         return value
     
     def validate_pin(self, value):
+        # Don't validate if PIN is already hashed
+        if value and value.startswith('pbkdf2_'):
+            return value
+            
         if not re.match(r'^\d{4}$', value): 
             raise serializers.ValidationError("PIN must be exactly 4 digits.")
         return value
+    
+    def update(self, instance, validated_data):
+        """Only re-hash the PIN when a new raw 4-digit PIN is provided."""
+        new_pin = validated_data.get('pin', None)
+
+        if new_pin:
+            # Only hash if it's a raw PIN (not already hashed)
+            if not new_pin.startswith('pbkdf2_'):
+                # Enforce 4-digit rule for raw PINs
+                if not new_pin.isdigit() or len(new_pin) != 4:
+                    raise serializers.ValidationError({"pin": "PIN must be 4 digits"})
+                validated_data['pin'] = make_password(new_pin)
+            # If already hashed, keep it as-is (it's already in validated_data)
+        else:
+            # If PIN not in update data, preserve existing PIN
+            validated_data.pop('pin', None)
+
+        return super().update(instance, validated_data)
     
 class VitalSignsSerializer(serializers.ModelSerializer): 
     class Meta:
@@ -35,7 +58,3 @@ class QueueEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = QueueEntry
         fields = ['id', 'patient', 'priority', 'entered_at', 'queue_number']
-  
-        
-    
-    

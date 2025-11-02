@@ -198,6 +198,10 @@ def archive_patient(patient_id, staff=None, reason=None):
     This moves data from active tables to archive tables.
     """
     try:
+        # Check if patient is already archived
+        if ArchivedPatient.objects.filter(patient_id=patient_id).exists():
+            return False, f"Patient {patient_id} is already archived"
+        
         # Get the patient
         patient = Patient.objects.get(patient_id=patient_id)
         
@@ -217,7 +221,7 @@ def archive_patient(patient_id, staff=None, reason=None):
             last_visit=patient.last_visit,
             archived_by=staff,
             archive_reason=reason,
-            original_created_at=timezone.now(),  # Or track actual creation date
+            original_created_at=timezone.now(),
         )
         
         # Archive all vital signs
@@ -246,7 +250,7 @@ def archive_patient(patient_id, staff=None, reason=None):
                 queue_number=entry.queue_number,
             )
         
-        # 5. Delete from active tables (CASCADE will delete related records)
+        # Delete from active tables (CASCADE will delete related records)
         patient.delete()
         
         return True, f"Patient {patient_id} archived successfully"
@@ -263,10 +267,14 @@ def restore_patient(patient_id):
     Restore an archived patient back to active tables.
     """
     try:
-        # 1. Get archived patient
+        # Get archived patient
         archived_patient = ArchivedPatient.objects.get(patient_id=patient_id)
         
-        # 2. Restore to Patient table
+        # Check if patient already exists in active table
+        if Patient.objects.filter(patient_id=patient_id).exists():
+            return False, f"Patient {patient_id} already exists in active records"
+        
+        # Restore to Patient table
         patient = Patient.objects.create(
             patient_id=archived_patient.patient_id,
             first_name=archived_patient.first_name,
@@ -282,12 +290,13 @@ def restore_patient(patient_id):
             last_visit=archived_patient.last_visit,
         )
         
-        # 3. Restore vital signs
+        # Restore vital signs
         archived_vitals = ArchivedVitalSigns.objects.filter(patient=archived_patient)
         for vital in archived_vitals:
             VitalSigns.objects.create(
                 patient=patient,
                 device_id=vital.device_id,
+                date_time_recorded=vital.date_time_recorded,
                 heart_rate=vital.heart_rate,
                 temperature=vital.temperature,
                 oxygen_saturation=vital.oxygen_saturation,
@@ -297,7 +306,7 @@ def restore_patient(patient_id):
                 bmi=vital.bmi,
             )
         
-        # 4. Delete from archive
+        # Delete from archive
         archived_patient.delete()
         
         return True, f"Patient {patient_id} restored successfully"
