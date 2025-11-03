@@ -465,30 +465,46 @@ def get_all_patients(request):
     """
     Retrieves all patients and attaches the latest vital signs
     to each patient object under the 'latest_vitals' key.
+    Supports search by name or patient_id.
     """
-    patients_queryset = Patient.objects.all().order_by('id')
+    patients_queryset = Patient.objects.all()
     
-    # 1. Efficiently find the ID of the LATEST VitalSigns record for each patient
+    # Add search filtering
+    search_term = request.GET.get('search', '').strip()
+    if search_term:
+        patients_queryset = patients_queryset.filter(
+            Q(first_name__icontains=search_term) | 
+            Q(last_name__icontains=search_term) | 
+            Q(address__icontains=search_term) | 
+            Q(patient_id__icontains=search_term)
+        )
+    
+    patients_queryset = patients_queryset.order_by('patient_id')  # Changed from 'id' to 'patient_id'
+    
+    # Find the ID of the LATEST VitalSigns record for each patient
+    # Note: VitalSigns still has an auto 'id' field, but links via 'patient' FK
     latest_vitals_map = VitalSigns.objects.filter(
         patient__in=patients_queryset
     ).values('patient').annotate(
         latest_id=Max('id')
     ).values_list('latest_id', flat=True)
 
-    # 2. Fetch the actual latest VitalSigns objects using their IDs
+    # Fetch the actual latest VitalSigns objects using their IDs
     latest_vitals = VitalSigns.objects.filter(id__in=latest_vitals_map)
-    # Map them by patient_id (database ID) for easy lookup
-    vitals_dict = {v.patient_id: v for v in latest_vitals}
+    
+    # Map them by patient.patient_id (the string ID) for easy lookup
+    vitals_dict = {v.patient.patient_id: v for v in latest_vitals}
 
-    # 3. Serialize patients
+    # Serialize patients
     serializer = PatientSerializer(patients_queryset, many=True)
     
     data = serializer.data
     
-    # 4. Inject latest_vitals data into the serialized output
+    # Inject latest_vitals data into the serialized output
     for patient_data in data:
-        patient_db_id = patient_data['id'] 
-        vital = vitals_dict.get(patient_db_id)
+        # Use 'patient_id' instead of 'id' since that's the primary key
+        patient_str_id = patient_data['patient_id']  # Changed from patient_data['id']
+        vital = vitals_dict.get(patient_str_id)
         
         latest_vital_data = None
         if vital:
@@ -512,7 +528,6 @@ def get_all_patients(request):
         patient_data['latest_vitals'] = latest_vital_data 
 
     return Response(data)
-
 
 @api_view(['POST'])
 def archive_patient_view(request, patient_id):

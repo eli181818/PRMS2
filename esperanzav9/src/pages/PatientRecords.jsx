@@ -42,9 +42,10 @@ export default function PatientRecords() {
   const fetchPatients = async (searchTerm = '') => {
     setLoading(true)
     try {
+      // Always use /all-patients/ endpoint which includes latest_vitals for each patient
       const url = searchTerm
-        ? `http://localhost:8000/patients/?search=${encodeURIComponent(searchTerm)}`
-        : `http://localhost:8000/patients/`
+        ? `http://localhost:8000/all-patients/?search=${encodeURIComponent(searchTerm)}`
+        : `http://localhost:8000/all-patients/`
       const res = await fetch(url, {
         credentials: 'include',
       })
@@ -419,7 +420,7 @@ export default function PatientRecords() {
                     </button>
                   </div>
                 </div>
-
+                
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border p-5" style={{ background: BRAND.bg, color: BRAND.text, borderColor: BRAND.border }}>
                     <div className="text-sm opacity-90">Heart Rate</div>
