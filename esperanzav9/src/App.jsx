@@ -16,6 +16,7 @@ import Weight from './pages/vitals/Weight'
 import Height from './pages/vitals/Height'
 import Pulse from './pages/vitals/Pulse'
 import Temperature from './pages/vitals/Temperature'
+import BP from "./pages/vitals/BP";
 import Records from './pages/Records'
 import Staff from './pages/Staff'
 import PatientLogin from './pages/PatientLogin'   
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/vitals/height" element={<Height />} />
           <Route path="/vitals/pulse" element={<Pulse />} />
           <Route path="/vitals/temperature" element={<Temperature />} />
+          <Route path="/vitals/bp" element={<BP />} />
           <Route path="/records/:username?" element={<Records />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/staff/patient-records/:patientId?" element={<PatientRecords />} />

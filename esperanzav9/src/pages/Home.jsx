@@ -51,7 +51,7 @@ export default function Home() {
               onClick={() => setActive(i)}
               aria-label={`Show panel ${i + 1}`}
               className={`h-3.5 w-3.5 rounded-full transition
-                ${active === i ? 'bg-emerald-600' : 'bg-slate-300 hover:bg-slate-400'}`}
+                ${active === i ? 'bg-[#6ec1af]' : 'bg-slate-300 hover:bg-slate-400'}`}
             />
           ))}
         </div>
@@ -66,7 +66,7 @@ export default function Home() {
                 onClick={() => setActive(idx)}
                 className={`rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 ease-in-out
                   ${isCenter
-                    ? 'scale-105 border-4 border-emerald-600 shadow-2xl z-10'
+                    ? 'scale-105 border-2 border-emerald-300 shadow-2xl z-10'
                     : 'scale-90 border border-slate-300 shadow-md opacity-90 hover:scale-95'}
                 `}
               >

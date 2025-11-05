@@ -1,11 +1,13 @@
 // Register.jsx
 // This page provides a registration form for new patients,
-// including biometric fingerprint capture (placeholder implementation lang).
+// including biometric fingerprint capture (placeholder/demo only).
 
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import bgRegister from '../assets/bgreg.png'
 import fingerPrint from '../assets/fingerprint-sensor.png'
+import showPinIcon from '../assets/show.png'
+import hidePinIcon from '../assets/hide.png'
 
 const months = [
   'January','February','March','April','May','June',
@@ -16,25 +18,30 @@ export default function Register() {
   const nav = useNavigate()
   const [creating, setCreating] = useState(false)
 
-  // Name fields is split
+  // Name fields
   const [first_name, setFirstName] = useState('')
-  const [middle_initial, setMiddleInitial] = useState('') 
+  const [middle_initial, setMiddleInitial] = useState('')
   const [last_name, setLastName] = useState('')
 
-  const [age, setAge] = useState('')
+  // Demographics
   const [sex, setSex] = useState('Male')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+
+  // Birthdate
   const [month, setMonth] = useState(months[0])
   const [day, setDay] = useState(1)
   const [year, setYear] = useState(new Date().getFullYear())
+
+  // Account
   const [username, setUsername] = useState('')
   const [pin, setPin] = useState('')
+  const [showPin, setShowPin] = useState(false)
 
-  // Biometric
-  const [fpStatus, setFpStatus] = useState('idle')
+  // Fingerprint (DEMO)
+  const [fpStatus, setFpStatus] = useState('idle') // idle | capturing | enrolled
   const [fpPreview, setFpPreview] = useState(null)
-  const requireFingerprint = false
+  const requireFingerprint = false // demo: allow registration without real enrollment
 
   const dob = useMemo(() => {
     const m = String(months.indexOf(month) + 1).padStart(2, '0')
@@ -42,11 +49,11 @@ export default function Register() {
     return `${year}-${m}-${d}`
   }, [month, day, year])
 
-  // Fingerprint capture (demo)
+  // Demo fingerprint capture
   const startFingerprintCapture = async () => {
     setFpStatus('capturing')
     setFpPreview(null)
-    await new Promise(r => setTimeout(r, 1800))
+    await new Promise(r => setTimeout(r, 1200))
     const fakeTemplate = {
       vendor: 'demo',
       version: 1,
@@ -60,6 +67,7 @@ export default function Register() {
 
   const submit = async (e) => {
     e.preventDefault()
+
     if (requireFingerprint && fpStatus !== 'enrolled') {
       alert('Please capture fingerprint before registering.')
       return
@@ -72,44 +80,42 @@ export default function Register() {
     setCreating(true)
 
     const patientProfile = {
-    first_name: first_name.trim(),
-    middle_initial: middle_initial.trim(),
-    last_name: last_name.trim(),
-    sex: sex,
-    birthdate: dob,  // Uses the useMemo calculated value
-    contact: phone.trim(),
-    address: address.trim(),
-    username: username.trim(),
-    pin: pin
-  }
+      first_name: first_name.trim(),
+      middle_initial: middle_initial.trim(),
+      last_name: last_name.trim(),
+      sex,
+      birthdate: dob,
+      contact: phone.trim(),
+      address: address.trim(),
+      username: username.trim(),
+      pin
+    }
 
     try {
-      // Register the patient
+      // Register
       const registerRes = await fetch('http://localhost:8000/patients/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(patientProfile),
       })
-      
+
       if (!registerRes.ok) {
-        const err = await registerRes.json()
+        const err = await registerRes.json().catch(() => ({}))
         alert("Failed to register patient:\n" + JSON.stringify(err, null, 2))
         setCreating(false)
         return
       }
 
-      const registerData = await registerRes.json()
-      
-      // Log the user in immediately after registration
-      const loginRes = await fetch('http://localhost:8000/login/', {  // Fixed URL
+      // Auto-login
+      const loginRes = await fetch('http://localhost:8000/login/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           username: username.trim(),
-          pin: pin,
-          login_type: 'patient'  
+          pin,
+          login_type: 'patient'
         }),
       })
 
@@ -119,31 +125,23 @@ export default function Register() {
         nav('/login')
         return
       }
-      
-      // Get the response data from the successful login
-      const loginData = await loginRes.json() // Added this line
 
-      // Now the user is authenticated with a session cookie
+      const loginData = await loginRes.json().catch(() => ({}))
       sessionStorage.setItem('isAuthenticated', 'true')
 
-      // 🌟 FIX APPLIED: Store the patient_id from the login response
       if (loginData.patient_id) {
-          sessionStorage.setItem('patient_id', loginData.patient_id) 
+        sessionStorage.setItem('patient_id', loginData.patient_id)
       } else {
-          console.warn("Login successful but no patient_id found in response payload. Check backend /login/ response.")
+        console.warn("Login successful but no patient_id found in response payload. Check backend /login/ response.")
       }
 
-
       setCreating(false)
-      // Redirect to vitals/weight, which now has the patient_id
       nav('/vitals/weight', { state: { afterCaptureGoTo: '/records' } })
-      
     } catch (err) {
-      alert("Network error: " + err.message)
+      alert("Network error: " + (err?.message || err))
       setCreating(false)
     }
   }
-  
 
   return (
     <section
@@ -159,7 +157,7 @@ export default function Register() {
 
         <div className="grid gap-8 md:grid-cols-[2fr,1fr]">
           <form onSubmit={submit} className="grid gap-6">
-            {/* Name: First, Middle, Last*/}
+            {/* Name */}
             <div className="grid md:grid-cols-3 gap-6">
               <div>
                 <label className="text-sm font-semibold text-slate-700">First Name</label>
@@ -177,88 +175,87 @@ export default function Register() {
                   onChange={e=>{
                     const v = e.target.value.replace(/[^A-Za-z]/g,'').slice(0,1).toUpperCase()
                     setMiddleInitial(v)
-                    }}
-                    maxLength={1}
-                    placeholder="A (optional)"
-                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                  />
-                  </div>
-                  <div>
-                  <label className="text-sm font-semibold text-slate-700">Last Name</label>
-                  <input
-                    value={last_name}
-                    onChange={e=>setLastName(e.target.value)}
-                    required
-                    className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                  />
-                  </div>
-                </div>
+                  }}
+                  maxLength={1}
+                  placeholder="A (optional)"
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Last Name</label>
+                <input
+                  value={last_name}
+                  onChange={e=>setLastName(e.target.value)}
+                  required
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                />
+              </div>
+            </div>
 
-                {/* Sex / Birthdate */}
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">Sex</label>
-                    <select
-                      value={sex}
-                      onChange={e=>setSex(e.target.value)}
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                    >
-                      <option>Male</option>
-                      <option>Female</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-sm font-semibold text-slate-700">Birthdate</label>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      <select
-                        value={month}
-                        onChange={e=>setMonth(e.target.value)}
-                        className="rounded-xl border border-slate-300 px-3 py-2.5"
-                      >
-                        {months.map(m => <option key={m}>{m}</option>)}
-                      </select>
-                      <select
-                        value={day}
-                        onChange={e=>setDay(Number(e.target.value))}
-                        className="rounded-xl border border-slate-300 px-3 py-2.5"
-                      >
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d}>{d}</option>)}
-                      </select>
-                      <select
-                        value={year}
-                        onChange={e=>setYear(Number(e.target.value))}
-                        className="rounded-xl border border-slate-300 px-3 py-2.5"
-                      >
-                        {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(y => (
-                          <option key={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+            {/* Sex / Birthdate */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Sex</label>
+                <select
+                  value={sex}
+                  onChange={e=>setSex(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                >
+                  <option>Male</option>
+                  <option>Female</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold text-slate-700">Birthdate</label>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <select
+                    value={month}
+                    onChange={e=>setMonth(e.target.value)}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5"
+                  >
+                    {months.map(m => <option key={m}>{m}</option>)}
+                  </select>
+                  <select
+                    value={day}
+                    onChange={e=>setDay(Number(e.target.value))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d}>{d}</option>)}
+                  </select>
+                  <select
+                    value={year}
+                    onChange={e=>setYear(Number(e.target.value))}
+                    className="rounded-xl border border-slate-300 px-3 py-2.5"
+                  >
+                    {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                      <option key={y}>{y}</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+            </div>
 
-                {/* Contact / Address */}
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">Phone Number</label>
-                    <input
-                      value={phone}
-                      onChange={e=>setPhone(e.target.value)}
-                      required
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-sm font-semibold text-slate-700">Address</label>
-                    <input
-                      value={address}
-                      onChange={e=>setAddress(e.target.value)}
-                      required
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                    />
-                  </div>
-                </div>
-
+            {/* Contact / Address */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Phone Number</label>
+                <input
+                  value={phone}
+                  onChange={e=>setPhone(e.target.value)}
+                  required
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold text-slate-700">Address</label>
+                <input
+                  value={address}
+                  onChange={e=>setAddress(e.target.value)}
+                  required
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                />
+              </div>
+            </div>
 
             {/* Username / PIN */}
             <div className="grid md:grid-cols-2 gap-6">
@@ -273,16 +270,33 @@ export default function Register() {
               </div>
               <div>
                 <label className="text-sm font-semibold text-slate-700">4-Digit PIN</label>
-                <input
-                  value={pin}
-                  onChange={e=>setPin(e.target.value.replace(/\D/g, '').slice(0,4))}
-                  required
-                  maxLength={4}
-                  inputMode="numeric"
-                  pattern="\d{4}"
-                  type="password"
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                />
+                <div className="relative mt-2">
+                  <input
+                    value={pin}
+                    onChange={e=>setPin(e.target.value.replace(/\D/g, '').slice(0,4))}
+                    required
+                    maxLength={4}
+                    inputMode="numeric"
+                    pattern="\d{4}"
+                    type={showPin ? 'text' : 'password'}
+                    className="mt-0 w-full rounded-xl border border-slate-300 px-4 py-2.5 pr-12"
+                    autoComplete="new-password"
+                    aria-label="4-digit PIN"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(s => !s)}
+                    className="absolute inset-y-0 right-2 my-auto h-9 w-9 grid place-items-center rounded-md hover:bg-slate-100"
+                    aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+                    title={showPin ? 'Hide PIN' : 'Show PIN'}
+                  >
+                    <img
+                      src={showPin ? hidePinIcon : showPinIcon}
+                      alt={showPin ? 'Hide PIN' : 'Show PIN'}
+                      className="h-5 w-5 object-contain select-none pointer-events-none"
+                    />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -290,18 +304,18 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={creating || (requireFingerprint && fpStatus !== 'enrolled')}
-                className="mt-6 bg-emerald-700 hover:bg-teal-700 disabled:opacity-60 text-white font-bold px-8 py-3 rounded-xl shadow-md"
+                className="mt-6 bg-[#6ec1af] hover:bg-teal-700 disabled:opacity-60 text-white font-bold px-8 py-3 rounded-xl shadow-md"
               >
                 {creating ? 'Creating Account...' : 'Register'}
               </button>
             </div>
           </form>
 
-          {/* Biometric card */}
+          {/* Biometric card (DEMO only) */}
           <aside className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
             <h3 className="text-lg font-extrabold text-emerald-800">Biometric Enrollment</h3>
             <p className="mt-1 text-sm text-emerald-900/80">
-              Capture the patient’s fingerprint. Placeholder only — will wire up sensor later.
+              Capture the patient’s fingerprint. Placeholder only — will wire up the sensor later.
             </p>
 
             <div className="mt-5 grid place-items-center">
@@ -333,13 +347,13 @@ export default function Register() {
                 <button
                   type="button"
                   onClick={startFingerprintCapture}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2"
+                  className="rounded-xl bg-[#6ec1af] hover:bg-teal-700 text-white font-semibold px-4 py-2"
                 >
                   {fpStatus === 'enrolled' ? 'Re-capture' : 'Start Capture'}
                 </button>
               )}
               {fpStatus === 'capturing' && (
-                <button type="button" disabled className="rounded-xl bg-emerald-600/70 text-white font-semibold px-4 py-2">
+                <button type="button" disabled className="rounded-xl bg-[#6ec1af] text-white font-semibold px-4 py-2">
                   Capturing…
                 </button>
               )}

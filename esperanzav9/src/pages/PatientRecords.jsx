@@ -1,3 +1,6 @@
+// hehe hindi ko mapakailaman yung input BP since di nagffetch it should be fetch sa BP.jsx
+
+
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import backIcon from '../assets/back.png'
@@ -8,6 +11,7 @@ const BRAND = {
   bg: '#DCEBE8',
   text: '#406E65',
   border: '#BEE1DB',
+  button: '#6ec1af',
 }
 
 export default function PatientRecords() {

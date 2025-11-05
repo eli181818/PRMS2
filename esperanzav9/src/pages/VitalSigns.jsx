@@ -1,21 +1,33 @@
 // VitalSigns.jsx
 // This page displays the results of a patient's vitals capture session,
 // including heart rate, temperature, oxygen saturation, height, weight, and BMI.
-// It also generates a unique queuing number for the patient and allows printing of results (placeholder).
+// It also generates a unique queuing number for the patient and allows printing of results.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import printIcon from '../assets/printer.png'
+import { triageAbnormal, nextPriorityCode } from './utils/triage'
+
+const API_URL = 'http://localhost:8000'
 
 export default function VitalSigns() {
-  const [step, setStep] = useState(3) 
+  // render step (3 = summary/print step)
+  const [step] = useState(3)
+
+  // queue number state
   const [queue, setQueue] = useState('001')
+
+  // modals
   const [showPrinting, setShowPrinting] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
-  const nav = useNavigate()
-  const location = useLocation()
 
-  // --- profile ---
+  // priority display state (derived after triage)
+  const [priority, setPriority] = useState('NORMAL') // 'NORMAL' | 'PRIORITY'
+  const [priorityCode, setPriorityCode] = useState(null) // e.g., E01
+
+  const nav = useNavigate()
+
+  // --- profile (optional, if you store it) ---
   const profile = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('patientProfile') || 'null')
@@ -24,19 +36,32 @@ export default function VitalSigns() {
     }
   }, [])
 
+  // helper to read BP (string like "120/80") from sessionStorage with fallbacks
+  const readBP = () => {
+    const possible = ['bp', 'step_bp', 'blood_pressure']
+    for (const k of possible) {
+      const v = sessionStorage.getItem(k)
+      if (v && String(v).trim().length) return String(v)
+    }
+    return '—'
+  }
+
   // --- Get actual sensor values from sessionStorage ---
   const [results] = useState(() => ({
-    heartRate: parseFloat(sessionStorage.getItem('step_hr')) || 0,
-    temperature: parseFloat(sessionStorage.getItem('temperature')) || 0,
-    spo2: parseFloat(sessionStorage.getItem('step_spo2')) || 0,
-    height: parseFloat(sessionStorage.getItem('step_height')) || 0,
-    weight: parseFloat(sessionStorage.getItem('step_weight')) || 0,
+    heartRate: Number(sessionStorage.getItem('step_hr')) || 0,
+    temperature: Number(sessionStorage.getItem('temperature')) || 0, // adjust key if needed
+    spo2: Number(sessionStorage.getItem('step_spo2')) || 0,
+    height: Number(sessionStorage.getItem('step_height')) || 0,
+    weight: Number(sessionStorage.getItem('step_weight')) || 0,
+    bp: readBP(), // "120/80" or "—"
   }))
 
+  // BMI
   const bmi = useMemo(() => {
     const h = results.height / 100
-    if (h === 0) return '0.0'
-    return (results.weight / (h * h)).toFixed(1)
+    if (!Number.isFinite(h) || h <= 0) return '0.0'
+    const val = results.weight / (h * h)
+    return Number.isFinite(val) ? val.toFixed(1) : '0.0'
   }, [results.height, results.weight])
 
   // --- queue number (reset daily) ---
@@ -57,12 +82,12 @@ export default function VitalSigns() {
     setQueue(String(next).padStart(3, '0'))
   }, [])
 
-  
+  // save & push to backend ONCE
   const savedRef = useRef(false)
   useEffect(() => {
     if (step !== 3 || savedRef.current) return
 
-    // latest vitals
+    // persist latest vitals locally
     localStorage.setItem(
       'latestVitals',
       JSON.stringify({
@@ -72,21 +97,103 @@ export default function VitalSigns() {
         height: results.height,
         weight: results.weight,
         bmi: Number(bmi),
+        bp: results.bp,
       })
     )
 
+    // build a record for local history (optional)
     const record = {
       id: `${new Date().toISOString()}-${queue}`,
       date: new Date().toISOString().slice(0, 10),
       hr: results.heartRate,
-      bp: '118/76',
+      bp: results.bp,
       temp: `${results.temperature} °C`,
       spo2: `${results.spo2}%`,
       name: profile?.name ?? '—',
-      patientId: profile?.patientId ?? '—',
+      patientId: profile?.patientId ?? (sessionStorage.getItem('patient_id') || '—'),
       queue,
     }
 
+    // -------- TRIAGE ----------
+    const vitalsForTriage = {
+      hr: results.heartRate,
+      bp: results.bp,             // string like "140/90"
+      spo2: results.spo2,
+      temp: results.temperature,  // number (°C)
+    }
+    const triage = triageAbnormal(vitalsForTriage)
+
+    let newPriority = 'NORMAL'
+    let newPriorityCode = null
+    if (triage.abnormal) {
+      newPriority = 'PRIORITY'
+      // If your backend assigns the code, skip this:
+      newPriorityCode = nextPriorityCode()
+    }
+
+    // reflect on UI
+    setPriority(newPriority)
+    setPriorityCode(newPriorityCode)
+
+    // save for print page
+    sessionStorage.setItem('last_vitals_priority', newPriority)
+    if (newPriorityCode) sessionStorage.setItem('last_vitals_priority_code', newPriorityCode)
+    if (triage.reasons?.length) {
+      sessionStorage.setItem('last_vitals_priority_reasons', JSON.stringify(triage.reasons))
+    } else {
+      sessionStorage.removeItem('last_vitals_priority_reasons')
+    }
+
+    // -------- SEND TO BACKEND ----------
+    const send = async () => {
+      try {
+        const patient_id = sessionStorage.getItem('patient_id') || profile?.patientId || null
+
+        const payload = {
+          patient_id,
+          vitals: {
+            height_cm: Number(results.height) || null,
+            weight_kg: Number(results.weight) || null,
+            heart_rate: Number(results.heartRate) || null,
+            blood_pressure: results.bp && results.bp !== '—' ? results.bp : null,
+            oxygen_saturation: Number(results.spo2) || null,
+            temperature: Number(results.temperature) || null,
+            bmi: Number.parseFloat(bmi) || null,
+          },
+          priority: newPriority,                 // 'NORMAL' | 'PRIORITY'
+          priority_code: newPriorityCode,        // e.g., 'E07' (optional if server assigns)
+          priority_reasons: triage.reasons || [],// optional for auditing
+          queue_number: queue,                   // if your server wants to store/display it
+        }
+
+        const res = await fetch(`${API_URL}/queue/add_or_update/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        })
+
+        // If server returns the code/priority, prefer it:
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}))
+          if (data?.priority) setPriority(String(data.priority).toUpperCase())
+          if (data?.priority_code) {
+            setPriorityCode(data.priority_code)
+            sessionStorage.setItem('last_vitals_priority_code', data.priority_code)
+          }
+        } else {
+          // Non-fatal for UI; you can show a toast if needed
+          console.warn('Queue add_or_update failed:', res.status)
+        }
+      } catch (e) {
+        console.error('Error sending vitals to backend:', e)
+      }
+    }
+
+    // Fire and forget
+    send()
+
+    // persist to local history
     const history = JSON.parse(localStorage.getItem('vitalsHistory') || '[]')
     history.unshift(record)
     localStorage.setItem('vitalsHistory', JSON.stringify(history))
@@ -94,23 +201,34 @@ export default function VitalSigns() {
     savedRef.current = true
   }, [step, results, bmi, queue, profile])
 
-  
+  // print flow
   const handlePrint = () => {
     setShowPrinting(true)
     setTimeout(() => {
       window.print()
       setShowPrinting(false)
       setShowFinished(true)
-    }, 2000) 
+    }, 800)
   }
 
+  // Derive what you need for the print modal INSIDE render (not inside JSX)
+  const pri = sessionStorage.getItem('last_vitals_priority') || priority || 'NORMAL'
+  const priCode = sessionStorage.getItem('last_vitals_priority_code') || priorityCode || null
+  const priReasons = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('last_vitals_priority_reasons') || '[]')
+    } catch {
+      return []
+    }
+  })()
+  const displayQueueNumber = queue // keep name you referenced in your snippet
+
+  // small stat card
   const Stat = ({ label, value, unit }) => (
-    <div className="rounded-2xl bg-slate-50 border p-6">
-      <p className="text-center text-slate-600">{label}</p>
-      <p className="mt-2 text-center text-3xl font-extrabold text-slate-900 tabular-nums">
-        {value}
-      </p>
-      {unit && <p className="mt-1 text-center text-slate-500 text-xs">{unit}</p>}
+    <div className="rounded-3xl bg-white/90 backdrop-blur border border-emerald-600 shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
+      <p className="text-slate-600 text-sm font-medium">{label}</p>
+      <p className="mt-2 text-4xl font-extrabold text-slate-900 tabular-nums">{value}</p>
+      {unit && <p className="mt-1 text-emerald-700 font-semibold text-sm">{unit}</p>}
     </div>
   )
 
@@ -125,15 +243,30 @@ export default function VitalSigns() {
 
       {step === 3 && (
         <>
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-            <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-6">
+          <div className="mt-5 grid gap-5 md:grid-cols-4">
+            {/* Queue number + PRIORITY badge */}
+            <div className="rounded-3xl bg-white/90 backdrop-blur border border-emerald-600 shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
               <p className="text-center text-slate-600">Your Queuing Number</p>
-              <p className="mt-2 text-center text-5xl md:text-6xl font-extrabold text-emerald-800 tabular-nums">
-                {queue}
-              </p>
+              <div className="mt-2 flex flex-col items-center gap-2">
+                {priority === 'PRIORITY' && (
+                  <div className="inline-flex items-center gap-2">
+                    <span className="rounded-md bg-red-600 px-2 py-[2px] text-[10px] font-bold uppercase tracking-wide text-white">
+                      Priority
+                    </span>
+                    {priorityCode && (
+                      <span className="font-mono text-xs text-red-700">{priorityCode}</span>
+                    )}
+                  </div>
+                )}
+                <p className="text-center text-5xl md:text-6xl font-extrabold text-black-800 tabular-nums">
+                  {queue}
+                </p>
+              </div>
             </div>
+
             <Stat label="Weight" value={results.weight} unit="kg" />
             <Stat label="Height" value={results.height} unit="cm" />
+            <Stat label="Blood Pressure" value={results.bp} unit="mmHg" />
           </div>
 
           <div className="mt-5 grid gap-5 md:grid-cols-4">
@@ -146,7 +279,7 @@ export default function VitalSigns() {
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               to="/records"
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-3"
+              className="rounded-xl bg-[#6ec1af] hover:bg-emerald-700 text-white font-semibold px-5 py-3"
             >
               Go to Records
             </Link>
@@ -161,7 +294,6 @@ export default function VitalSigns() {
         </>
       )}
 
-      
       {showPrinting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 text-center">
@@ -170,7 +302,6 @@ export default function VitalSigns() {
         </div>
       )}
 
-      
       {showFinished && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 text-center max-w-sm">
@@ -183,9 +314,37 @@ export default function VitalSigns() {
             >
               Finish
             </button>
+
+            {/* Printable header snippet showing priority label and code */}
+            <div className="mt-6 text-left">
+              <div className="mb-2 text-sm">
+                <span className="font-semibold">Queue Number:</span>{' '}
+                {pri === 'PRIORITY' && priCode ? (
+                  <span className="inline-flex items-center gap-2 align-middle">
+                    <span className="rounded-md bg-red-600 px-2 py-[2px] text-[10px] font-bold uppercase tracking-wide text-white">
+                      Priority
+                    </span>
+                    <span className="font-mono text-xs text-red-700">{priCode}</span>
+                    <span className="font-mono text-base text-slate-800">• {displayQueueNumber}</span>
+                  </span>
+                ) : (
+                  <span className="font-mono text-base text-slate-800">{displayQueueNumber}</span>
+                )}
+              </div>
+
+              {pri === 'PRIORITY' && priReasons.length > 0 && (
+                <div className="mt-2 text-[11px] text-red-700">
+                  <div className="font-semibold uppercase tracking-wide">Triage: Priority</div>
+                  <ul className="list-disc pl-5">
+                    {priReasons.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
     </section>
   )
 }
+

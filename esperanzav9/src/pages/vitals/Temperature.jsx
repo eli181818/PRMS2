@@ -132,7 +132,7 @@ export default function Temperature() {
         <div className="mt-8 space-y-6 text-center">
           <ResultCard label="Temperature" value={temp} unit="°C" />
           <button
-            onClick={() => nav('/vitals')}
+            onClick={() => nav('/vitals/bp')}
             className="rounded-xl bg-[#6ec1af] px-6 py-3 font-semibold text-white hover:bg-emerald-800/70"
           >
             Continue
