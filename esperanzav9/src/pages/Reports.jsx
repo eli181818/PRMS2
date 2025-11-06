@@ -1,7 +1,7 @@
 // Reports.jsx - Connected to Database
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom' // ✅ Added useSearchParams
-import backIcon from '../assets/back.png'
+import backIcon from '../assets/arrow.png'
 import accIcon from '../assets/account.png'
 import searchIcon from '../assets/search.png'
 
@@ -135,7 +135,7 @@ export default function Reports() {
       <div className="absolute top-4 left-4">
         <button
           onClick={() => nav(-1)}
-          className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 shadow"
+          className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-[#406E65] hover:bg-slate-50 shadow"
         >
           <img src={backIcon} alt="Back" className="h-4 w-4 object-contain" />
           <span className="text-sm font-medium">Back</span>

@@ -346,7 +346,7 @@ export default function PrivacyNotice() {
         <button
           onClick={agree}
           disabled={!checked}
-          className="bg-[#6ec1af] text-white px-6 py-2 rounded-lg disabled:opacity-50"
+          className="bg-[#6ec1af] hover:bg-emerald-800/70 text-white px-6 py-2 rounded-lg disabled:opacity-50"
         >
           I AGREE
         </button>

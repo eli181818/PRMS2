@@ -304,7 +304,7 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={creating || (requireFingerprint && fpStatus !== 'enrolled')}
-                className="mt-6 bg-[#6ec1af] hover:bg-teal-700 disabled:opacity-60 text-white font-bold px-8 py-3 rounded-xl shadow-md"
+                className="mt-6 bg-[#6ec1af] hover:bg-emerald-800/70 disabled:opacity-60 text-white font-bold px-8 py-3 rounded-xl shadow-md"
               >
                 {creating ? 'Creating Account...' : 'Register'}
               </button>
@@ -347,7 +347,7 @@ export default function Register() {
                 <button
                   type="button"
                   onClick={startFingerprintCapture}
-                  className="rounded-xl bg-[#6ec1af] hover:bg-teal-700 text-white font-semibold px-4 py-2"
+                  className="rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-4 py-2"
                 >
                   {fpStatus === 'enrolled' ? 'Re-capture' : 'Start Capture'}
                 </button>

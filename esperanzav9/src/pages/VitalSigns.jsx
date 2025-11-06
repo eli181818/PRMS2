@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { triageAbnormal, nextPriorityCode } from './utils/triage'
+import printIcon from '../assets/printer-green.png'
 
 const API_URL = 'http://localhost:8000'
 
@@ -20,7 +21,7 @@ export default function VitalSigns() {
   const [showPrinting, setShowPrinting] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
 
-  // priority display state (derived after triage)
+  // priority state (from triage)
   const [priority, setPriority] = useState('NORMAL') // 'NORMAL' | 'PRIORITY'
   const [priorityCode, setPriorityCode] = useState(null) // e.g., E01
 
@@ -113,12 +114,12 @@ export default function VitalSigns() {
       queue,
     }
 
-    // -------- TRIAGE ----------
+    // RESULTS FOR TRIAGE OR PRIORITY DECISION
     const vitalsForTriage = {
       hr: results.heartRate,
-      bp: results.bp,             // string like "140/90"
+      bp: results.bp,             
       spo2: results.spo2,
-      temp: results.temperature,  // number (°C)
+      temp: results.temperature,  
     }
     const triage = triageAbnormal(vitalsForTriage)
 
@@ -126,15 +127,16 @@ export default function VitalSigns() {
     let newPriorityCode = null
     if (triage.abnormal) {
       newPriority = 'PRIORITY'
-      // If your backend assigns the code, skip this:
+
+      // assign a code for priority (customize this logic)
       newPriorityCode = nextPriorityCode()
     }
 
-    // reflect on UI
+    // update ui state
     setPriority(newPriority)
     setPriorityCode(newPriorityCode)
 
-    // save for print page
+    // save to session for printout
     sessionStorage.setItem('last_vitals_priority', newPriority)
     if (newPriorityCode) sessionStorage.setItem('last_vitals_priority_code', newPriorityCode)
     if (triage.reasons?.length) {
@@ -221,7 +223,7 @@ export default function VitalSigns() {
   })()
   const displayQueueNumber = queue // keep name you referenced in your snippet
 
-  // ====== NEW: fields for the print ticket ======
+  // REF for print area
   const printRef = useRef(null)
   const patientId = profile?.patientId ?? (sessionStorage.getItem('patient_id') || '—')
   const patientName = profile?.name ?? (sessionStorage.getItem('patient_name') || '—')
@@ -242,8 +244,7 @@ export default function VitalSigns() {
       {/* CSS STYLE FOR PRINTING - CHANGED IF YOU NEED TO CHANGE THE LAYOUT OR FONT OF THE RECEIPTS  */}
       <style>
         {`
-          /* Paper: 58mm roll fits a 48mm content width nicely. */
-          @page { size: 58mm auto; margin: 3mm; }
+          @page { size: 48mm auto; margin: 3mm; }
 
           @media print {
             body * { visibility: hidden !important; }
@@ -262,7 +263,7 @@ export default function VitalSigns() {
           #print-root .sm { font-size: 11px; }
           #print-root .xs { font-size: 10px; }
           #print-root .label { font-size: 10px; text-transform: uppercase; letter-spacing: .2px; color: #000; }
-          #print-root .val { font-size: 13px; font-weight: 700; }
+          #print-root .val { font-size: 10px; font-weight: 700; }
           #print-root .big { font-size: 22px; font-weight: 900; letter-spacing: 1px; }
 
           /* Queuing box */
@@ -360,10 +361,12 @@ export default function VitalSigns() {
             </Link>
             <button
               onClick={handlePrint}
-              className="rounded-xl border border-slate-300 hover:bg-slate-50 px-5 py-3 font-semibold text-slate-800 inline-flex items-center gap-2"
+              className="rounded-xl border border-slate-300 hover:bg-slate-50 px-5 py-3 font-semibold text-[#406E65] inline-flex items-center gap-2"
             >
-              Print Results
+              <img src={printIcon} alt="" className="h-4 w-4 object-contain" />
+              <span>Print Results</span>
             </button>
+
           </div>
         </>
       )}
@@ -425,7 +428,7 @@ export default function VitalSigns() {
         <div style={{ width: '48mm', margin: '0 auto' }}>
           {/* Header */}
           <div className="center mb6">
-            <div className="big">Esperanza HC</div>
+            <div className="big">Esperanza Health Center</div>
             <div className="sm">Vital Signs Result</div>
             <div className="xs">{printedAt}</div>
           </div>
@@ -466,13 +469,13 @@ export default function VitalSigns() {
           {/* Measurements */}
           <div className="label">Measurements</div>
           <div className="meas mt4">
-            <div classname="label">Weight</div><div className="val">{results.weight} kg</div>
-            <div classname="label">Height</div><div className="val">{results.height} cm</div>
-            <div classname="label">BMI</div><div className="val">{bmi} kg/m²</div>
-            <div classname="label">Heart Rate</div><div className="val">{results.heartRate} bpm</div>
-            <div classname="label">SpO₂</div><div className="val">{results.spo2} %</div>
-            <div classname="label">Temp</div><div className="val">{results.temperature} °C</div>
-            <div classname="label">BP</div><div className="val">{results.bp} mmHg</div>
+            <div className="label">Weight</div><div className="val">{results.weight} kg</div>
+            <div className="label">Height</div><div className="val">{results.height} cm</div>
+            <div className="label">BMI</div><div className="val">{bmi} kg/m²</div>
+            <div className="label">Heart Rate</div><div className="val">{results.heartRate} bpm</div>
+            <div className="label">SpO₂</div><div className="val">{results.spo2} %</div>
+            <div className="label">Temp</div><div className="val">{results.temperature} °C</div>
+            <div className="label">BP</div><div className="val">{results.bp} mmHg</div>
           </div>
 
           <div className="hr"></div>

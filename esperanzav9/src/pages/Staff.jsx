@@ -7,7 +7,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import reportsIcon from '../assets/file.png'
 import patientsIcon from '../assets/patients.png'
 import queueIcon from '../assets/queue.png'
-import logoutIcon from '../assets/logout.png'   
+import logoutIcon from '../assets/logout-green.png'   
 
 export default function Staff() {
   const nav = useNavigate()
@@ -31,7 +31,7 @@ export default function Staff() {
       <div className="absolute top-4 right-4">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50 shadow"
+          className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-[#406E65] hover:bg-slate-50 shadow"
         >
           <img src={logoutIcon} alt="Logout" className="h-4 w-4 object-contain" />
           <span className="text-sm font-medium">Logout</span>

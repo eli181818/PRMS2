@@ -159,7 +159,7 @@ export default function BP() {
       )}
 
       <SmallModal open={saving}>
-        <p className="text-xl font-semibold text-slate-800">Saving blood pressure…</p>
+        <p className="text-xl font-semibold text-[#406E65]">Saving blood pressure…</p>
       </SmallModal>
     </section>
   )

@@ -131,7 +131,7 @@ export default function Temperature() {
             {loading ? 'Reading...' : 'Start'}
           </button>
           {error && <p className="mt-3 text-red-600 font-medium">{error}</p>}
-          {loading && <p className="mt-3 text-slate-600">Fetching temperature...</p>}
+          {loading && <p className="mt-3 text-[#406E65]">Fetching temperature...</p>}
         </div>
       ) : (
         <div className="mt-8 space-y-6 text-center">
@@ -146,8 +146,8 @@ export default function Temperature() {
       )}
 
       <SmallModal open={showInit}>
-        <p className="text-xl font-semibold text-slate-800">Initializing temperature…</p>
-        <p className="mt-1 text-slate-600">Hold steady.</p>
+        <p className="text-xl font-semibold text-[#406E65]">Initializing temperature…</p>
+        <p className="mt-1 text-[#406E65]">Hold steady.</p>
       </SmallModal>
     </section>
   );

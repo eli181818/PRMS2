@@ -113,8 +113,8 @@ export default function Pulse() {
       )}
 
       <SmallModal open={showInit}>
-        <p className="text-xl font-semibold text-slate-800">Initializing pulse…</p>
-        <p className="mt-1 text-slate-600">Keep your hand still.</p>
+        <p className="text-xl font-semibold text-[#406E65]">Initializing pulse…</p>
+        <p className="mt-1 text-[#406E65]">Keep your hand still.</p>
       </SmallModal>
     </section>
   );

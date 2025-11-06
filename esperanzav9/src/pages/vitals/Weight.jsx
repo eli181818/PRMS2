@@ -102,8 +102,8 @@ export default function Weight() {
       )}
 
       <SmallModal open={showInit}>
-        <p className="text-xl font-semibold text-slate-800">Initializing weight…</p>
-        <p className="mt-1 text-slate-600">Please stand still.</p>
+        <p className="text-xl font-semibold text-[#406E65]">Initializing weight…</p>
+        <p className="mt-1 text-[#406E65]">Please stand still.</p>
       </SmallModal>
     </section>
   );

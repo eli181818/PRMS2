@@ -5,8 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import priorityIcon from '../assets/disabled.png'
 import nextIcon from '../assets/next.png'
 import listIcon from '../assets/list.png'
-import backIcon from '../assets/back.png'
 import searchIcon from '../assets/search.png'
+//import backIcon from '../assets/arrow.png'
 
 const API_URL = 'http://localhost:8000'
 
@@ -208,7 +208,7 @@ export default function QueueManagement() {
       </button> */}
 
       {/* Header */}
-      <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-emerald-800">
+      <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-[#406E65]">
         Queue Management
       </h1>
 
@@ -217,7 +217,7 @@ export default function QueueManagement() {
         {/* Now Serving */}
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center shadow-sm flex flex-col items-center justify-center">
           <div className="flex justify-center items-center mt-2 flex-1">
-            <span className="text-6xl font-black text-emerald-900 tabular-nums">
+            <span className="text-6xl font-black text-[#406E65] tabular-nums">
               {loading ? '...' : currentNumber}
             </span>
           </div>
@@ -235,7 +235,7 @@ export default function QueueManagement() {
         >
           <img src={nextIcon} alt="Next" className="mx-auto h-10 w-10 object-contain mb-2" />
           <div className="text-sm text-slate-600">Next</div>
-          <div className="mt-2 text-xl font-extrabold text-emerald-800">Next Patient</div>
+          <div className="mt-2 text-xl font-extrabold text-[#406E65]">Next Patient</div>
         </button>
 
         {/* Emergency / Priority */}
@@ -245,7 +245,7 @@ export default function QueueManagement() {
         >
           <img src={priorityIcon} alt="Emergency / Priority" className="mx-auto h-10 w-10 object-contain mb-2" />
           <div className="text-sm text-slate-600">Add</div>
-          <div className="mt-2 text-xl font-extrabold text-emerald-800">Emergency / Priority</div>
+          <div className="mt-2 text-xl font-extrabold text-[#406E65]">Emergency / Priority</div>
         </button>
 
         {/* Queue List */}
@@ -255,7 +255,7 @@ export default function QueueManagement() {
         >
           <img src={listIcon} alt="Queue List" className="mx-auto h-10 w-10 object-contain mb-2" />
           <div className="text-sm text-slate-600">View</div>
-          <div className="mt-2 text-xl font-extrabold text-emerald-800">Queue List</div>
+          <div className="mt-2 text-xl font-extrabold text-[#406E65]">Queue List</div>
         </button>
       </div>
 
@@ -263,7 +263,7 @@ export default function QueueManagement() {
       <div ref={tableRef} className="mt-6 rounded-2xl border shadow-sm overflow-hidden bg-white">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-5 pt-5">
           <div className="text-lg font-extrabold" style={{ color: '#406E65' }}>
-            Patient <span className="text-emerald-700">Queue</span>
+            Patient <span className="text-[#406E65]">Queue</span>
           </div>
           <div className="w-full md:w-[26rem]">
             <div className="relative">
@@ -271,7 +271,7 @@ export default function QueueManagement() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search number, name, patient ID, BP…"
-                className="w-full rounded-full border border-emerald-200/70 bg-emerald-50/40 px-4 py-2.5 pr-10 text-emerald-900 placeholder-emerald-800/60"
+                className="w-full rounded-full border border-emerald-200/70 bg-emerald-50/40 px-4 py-2.5 pr-10 text-[#406E65] placeholder-emerald-800/60"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-800/70">
                 <img
@@ -359,13 +359,13 @@ export default function QueueManagement() {
         <div className="flex justify-end gap-3 p-5">
           <button
             onClick={handleRefresh}
-            className="rounded-xl border border-emerald-600 bg-white px-6 py-2.5 font-semibold text-emerald-700 hover:bg-emerald-50"
+            className="rounded-xl border border-[#6ec1af] bg-white px-6 py-2.5 font-semibold text-[#406E65] hover:bg-emerald-50"
           >
             Refresh
           </button>
           <button
             onClick={handleExit}
-            className="rounded-xl bg-[#6ec1af] px-6 py-2.5 font-semibold text-white hover:bg-emerald-700"
+            className="rounded-xl bg-[#6ec1af] px-6 py-2.5 font-semibold text-white hover:bg-emerald-800/70"
           >
             Exit
           </button>
@@ -379,7 +379,7 @@ export default function QueueManagement() {
           aria-modal="true"
         >
           <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl p-6 text-center">
-            <h3 className="text-3xl font-extrabold tracking-wide text-emerald-800">
+            <h3 className="text-3xl font-extrabold tracking-wide text-[#406E65]">
               Now serving queue #{currentNumber}
             </h3>
             <p className="mt-2 text-lg text-slate-600">{queue[now]?.name}</p>

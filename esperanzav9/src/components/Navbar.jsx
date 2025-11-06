@@ -14,7 +14,7 @@ export default function Navbar() {
       onClick={() => setOpen(false)}
       className={({ isActive }) =>
         `nav-link px-3 py-2 rounded-lg ${
-          isActive ? 'text-brand-700 font-semibold bg-brand-50' : ''
+          isActive ? 'text-[#406E65] font-semibold bg-brand-50' : ''
         }`
       }
     >
@@ -72,7 +72,7 @@ export default function Navbar() {
               to="/login"
               aria-label="Login"
               onClick={() => setOpen(false)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 shadow ring-1 ring-emerald-500/60"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#6ec1af] hover:bg-emerald-800/70 shadow ring-1 ring-[#6406E65]"
             >
               <img src={userIcon} alt="" className="h-5 w-5 object-contain" />
             </Link>
