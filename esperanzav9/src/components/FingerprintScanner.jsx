@@ -23,7 +23,7 @@ export default function FingerprintScanner({ onComplete = () => {} }) {
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative size-40 rounded-[28px] border-2 border-brand-500 p-4 bg-white shadow-sm">
+      <div className="relative size-40 rounded-[28px] border-2 border-[#6ec1af] p-4 bg-white shadow-sm">
         <div className="absolute inset-0 rounded-[26px] animate-pulseGlow"></div>
 
         <div className="relative flex h-full w-full items-center justify-center rounded-2xl" style={{ backgroundColor: '#6EC1AF' }}>
@@ -50,7 +50,7 @@ export default function FingerprintScanner({ onComplete = () => {} }) {
       </div>
 
       <div className="mt-3 w-56 h-2 rounded-full bg-slate-200 overflow-hidden">
-        <div className="h-full bg-brand-500" style={{ width: progress + '%' }} />
+        <div className="h-full bg-[#6ec1af]" style={{ width: progress + '%' }} />
       </div>
     </div>
   )

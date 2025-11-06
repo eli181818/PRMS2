@@ -5,7 +5,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import printIcon from '../assets/printer.png'
 import { triageAbnormal, nextPriorityCode } from './utils/triage'
 
 const API_URL = 'http://localhost:8000'
@@ -182,7 +181,6 @@ export default function VitalSigns() {
             sessionStorage.setItem('last_vitals_priority_code', data.priority_code)
           }
         } else {
-          // Non-fatal for UI; you can show a toast if needed
           console.warn('Queue add_or_update failed:', res.status)
         }
       } catch (e) {
@@ -223,19 +221,96 @@ export default function VitalSigns() {
   })()
   const displayQueueNumber = queue // keep name you referenced in your snippet
 
+  // ====== NEW: fields for the print ticket ======
+  const printRef = useRef(null)
+  const patientId = profile?.patientId ?? (sessionStorage.getItem('patient_id') || '—')
+  const patientName = profile?.name ?? (sessionStorage.getItem('patient_name') || '—')
+  const now = new Date()
+  const printedAt = `${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+
   // small stat card
   const Stat = ({ label, value, unit }) => (
-    <div className="rounded-3xl bg-white/90 backdrop-blur border border-emerald-600 shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
-      <p className="text-slate-600 text-sm font-medium">{label}</p>
-      <p className="mt-2 text-4xl font-extrabold text-slate-900 tabular-nums">{value}</p>
-      {unit && <p className="mt-1 text-emerald-700 font-semibold text-sm">{unit}</p>}
+    <div className="rounded-3xl bg-white/90 backdrop-blur border border-[#6ec1af] shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
+      <p className="text-[#406E65] text-sm font-medium">{label}</p>
+      <p className="mt-2 text-4xl font-extrabold text-[#406E65] tabular-nums">{value}</p>
+      {unit && <p className="mt-1 text-[#406E65] font-semibold text-sm">{unit}</p>}
     </div>
   )
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
-      <h2 className="text-3xl md:text-5xl font-extrabold text-center bg-gradient-to-r from-emerald-600 via-teal-600 to-slate-700 bg-clip-text text-transparent leading-tight">
-        Vitals Capture <span className="text-emerald-600">Complete!</span>
+      {/* CSS STYLE FOR PRINTING - CHANGED IF YOU NEED TO CHANGE THE LAYOUT OR FONT OF THE RECEIPTS  */}
+      <style>
+        {`
+          /* Paper: 58mm roll fits a 48mm content width nicely. */
+          @page { size: 58mm auto; margin: 3mm; }
+
+          @media print {
+            body * { visibility: hidden !important; }
+            #print-root, #print-root * { visibility: visible !important; }
+            #print-root { position: absolute; inset: 0; width: 100%; }
+          }
+
+          /* Receipt look */
+          #print-root {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          #print-root .hr { border-top: 1px dashed #000; margin: 6px 0; }
+          #print-root .sm { font-size: 11px; }
+          #print-root .xs { font-size: 10px; }
+          #print-root .label { font-size: 10px; text-transform: uppercase; letter-spacing: .2px; color: #000; }
+          #print-root .val { font-size: 13px; font-weight: 700; }
+          #print-root .big { font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+
+          /* Queuing box */
+          #print-root .qbox {
+            border: 2px solid #000;
+            border-radius: 4px;
+            padding: 6px 0;
+            text-align: center;
+            margin: 4px 0 2px 0;
+          }
+
+          /* Two-column KV grid */
+          #print-root .kv {
+            display: grid;
+            grid-template-columns: 26mm 1fr;
+            row-gap: 2px;
+          }
+
+          /* Measurements grid: label on left, value on right */
+          #print-root .meas {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            row-gap: 2px;
+          }
+
+          /* Subtle priority tag (prints fine on thermal) */
+          #print-root .prio {
+            display: inline-block;
+            border: 1px solid #000;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+          }
+
+          /* Utilities */
+          #print-root .center { text-align: center; }
+          #print-root .mt4 { margin-top: 4px; }
+          #print-root .mt6 { margin-top: 6px; }
+          #print-root .mb4 { margin-bottom: 4px; }
+          #print-root .mb6 { margin-bottom: 6px; }
+        `}
+        </style>
+
+
+      <h2 className="text-3xl md:text-5xl font-extrabold text-center bg-gradient-to-r from-emerald-700 via-teal-600 to-slate-700 bg-clip-text text-transparent leading-tight">
+        Vitals Capture Complete!
       </h2>
       <p className="mt-2 text-center text-slate-700">
         Below are the results of your vitals today.
@@ -245,8 +320,8 @@ export default function VitalSigns() {
         <>
           <div className="mt-5 grid gap-5 md:grid-cols-4">
             {/* Queue number + PRIORITY badge */}
-            <div className="rounded-3xl bg-white/90 backdrop-blur border border-emerald-600 shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
-              <p className="text-center text-slate-600">Your Queuing Number</p>
+            <div className="rounded-3xl bg-white/90 backdrop-blur border border-[#6ec1af] shadow-[0_8px_24px_rgba(16,185,129,.15)] hover:shadow-[0_12px_28px_rgba(15,23,42,.22)] transition-shadow p-6 flex flex-col items-center text-center">
+              <p className="text-center text-[#406E65]">Your Queuing Number</p>
               <div className="mt-2 flex flex-col items-center gap-2">
                 {priority === 'PRIORITY' && (
                   <div className="inline-flex items-center gap-2">
@@ -258,7 +333,7 @@ export default function VitalSigns() {
                     )}
                   </div>
                 )}
-                <p className="text-center text-5xl md:text-6xl font-extrabold text-black-800 tabular-nums">
+                <p className="text-center text-5xl text-[#406E65] md:text-6xl font-extrabold text-black-800 tabular-nums">
                   {queue}
                 </p>
               </div>
@@ -279,7 +354,7 @@ export default function VitalSigns() {
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               to="/records"
-              className="rounded-xl bg-[#6ec1af] hover:bg-emerald-700 text-white font-semibold px-5 py-3"
+              className="rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-5 py-3"
             >
               Go to Records
             </Link>
@@ -287,13 +362,13 @@ export default function VitalSigns() {
               onClick={handlePrint}
               className="rounded-xl border border-slate-300 hover:bg-slate-50 px-5 py-3 font-semibold text-slate-800 inline-flex items-center gap-2"
             >
-              <img src={printIcon} alt="Print" className="h-5 w-5" />
               Print Results
             </button>
           </div>
         </>
       )}
 
+      {/* PRINTINGGGG */}
       {showPrinting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 text-center">
@@ -310,7 +385,7 @@ export default function VitalSigns() {
             </p>
             <button
               onClick={() => nav('/records')}
-              className="mt-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5"
+              className="mt-6 rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-5 py-2.5"
             >
               Finish
             </button>
@@ -344,7 +419,72 @@ export default function VitalSigns() {
           </div>
         </div>
       )}
+
+      {/* ===================== PRINT-ONLY TICKET ===================== */}
+      <div id="print-root" ref={printRef} className="hidden print:block">
+        <div style={{ width: '48mm', margin: '0 auto' }}>
+          {/* Header */}
+          <div className="center mb6">
+            <div className="big">Esperanza HC</div>
+            <div className="sm">Vital Signs Result</div>
+            <div className="xs">{printedAt}</div>
+          </div>
+
+          <div className="hr"></div>
+
+          {/* Queue + Priority */}
+          <div className="center">
+            <div className="label">Queue No.</div>
+            <div className="qbox big">{queue}</div>
+            <div className="mt4">
+              <span className="label">Priority:&nbsp;</span>
+              {pri === 'PRIORITY'
+                ? <span className="prio">Priority{priCode ? ` ${priCode}` : ''}</span>
+                : <span className="val">Normal</span>}
+            </div>
+          </div>
+
+          {/* Identity */}
+          <div className="kv mt6">
+            <div className="label">Patient ID</div><div className="val">{patientId}</div>
+            <div className="label">Patient Name</div><div className="val">{patientName}</div>
+          </div>
+
+          {/* Priority reasons (if any) */}
+          {pri === 'PRIORITY' && priReasons?.length > 0 && (
+            <>
+              <div className="hr"></div>
+              <div className="label mb4">Priority Reasons</div>
+              <ul className="xs" style={{ margin: 0, paddingLeft: 14 }}>
+                {priReasons.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </>
+          )}
+
+          <div className="hr"></div>
+
+          {/* Measurements */}
+          <div className="label">Measurements</div>
+          <div className="meas mt4">
+            <div classname="label">Weight</div><div className="val">{results.weight} kg</div>
+            <div classname="label">Height</div><div className="val">{results.height} cm</div>
+            <div classname="label">BMI</div><div className="val">{bmi} kg/m²</div>
+            <div classname="label">Heart Rate</div><div className="val">{results.heartRate} bpm</div>
+            <div classname="label">SpO₂</div><div className="val">{results.spo2} %</div>
+            <div classname="label">Temp</div><div className="val">{results.temperature} °C</div>
+            <div classname="label">BP</div><div className="val">{results.bp} mmHg</div>
+          </div>
+
+          <div className="hr"></div>
+
+          {/* Footer */}
+          <div className="xs center mt6">
+            For check-up and consultation, please proceed to the clinic area once your queuing number has been called.
+          </div>
+        </div>
+      </div>
+      {/* =================== END PRINT-ONLY TICKET =================== */}
+
     </section>
   )
 }
-
