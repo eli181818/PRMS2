@@ -1,3 +1,4 @@
+import base64
 from django.shortcuts import render  # Unused but kept if needed elsewhere
 from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
@@ -572,5 +573,27 @@ def get_archived_patients(request):
     } for p in archived]
     
     return Response(data)
+
+@api_view(['POST'])
+def store_fingerprint(request):
+    """
+    Store fingerprint template sent from Raspberry Pi.
+    Example JSON: {"patient_id": "P-20251107-001", "template": "<base64_string>"}
+    """
+    patient_id = request.data.get("patient_id")
+    template_b64 = request.data.get("template")
+
+    if not patient_id or not template_b64:
+        return Response({"error": "Missing patient_id or template"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        patient = Patient.objects.get(patient_id=patient_id)
+        # Decode the base64 template
+        template_bytes = base64.b64decode(template_b64)
+        patient.fingerprint_template = template_bytes
+        patient.save()
+        return Response({"message": "Fingerprint template stored successfully!"})
+    except Patient.DoesNotExist:
+        return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
 
  

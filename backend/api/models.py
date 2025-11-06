@@ -34,6 +34,7 @@ class Patient(models.Model):
     birthdate = models.DateField(null=True, blank=True)
     pin = models.CharField(max_length=255)
     fingerprint_id = models.CharField(max_length=4, null=True, blank=True, unique=True)
+    fingerprint_template = models.BinaryField(null=True, blank=True)
     last_visit = models.DateTimeField(null=True, blank=True)
     
     def set_pin(self, raw_pin):
@@ -144,6 +145,7 @@ class ArchivedPatient(models.Model):
     birthdate = models.DateField(null=True, blank=True)
     pin = models.CharField(max_length=255)
     fingerprint_id = models.CharField(max_length=4, null=True, blank=True)
+    fingerprint_template = models.BinaryField(null=True, blank=True)
     last_visit = models.DateTimeField(null=True, blank=True)
     
     # Archive metadata
