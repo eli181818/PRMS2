@@ -620,3 +620,30 @@ def verify_fingerprint(request):
         }, status=200)
     except Patient.DoesNotExist:
         return Response({"error": f"No patient found with fingerprint_id {user_id}"}, status=404)
+
+# Add this to your views.py
+@api_view(['POST'])
+def fingerprint_match_notification(request):
+    """
+    Called by the fingerprint scanner management command
+    when a match is found (optional - for real-time notifications)
+    """
+    fingerprint_id = request.data.get('fingerprint_id')
+    confidence = request.data.get('confidence')
+    
+    try:
+        patient = Patient.objects.get(fingerprint_id=fingerprint_id)
+        
+        # You could trigger websocket notifications here
+        # or update a cache for frontend polling
+        
+        return Response({
+            'status': 'success',
+            'patient_id': patient.patient_id,
+            'name': f'{patient.first_name} {patient.last_name}'
+        })
+    except Patient.DoesNotExist:
+        return Response({
+            'status': 'unknown',
+            'message': 'Fingerprint not registered'
+        }, status=404)
