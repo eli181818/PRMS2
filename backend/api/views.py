@@ -1,3 +1,4 @@
+import base64
 from django.shortcuts import render  # Unused but kept if needed elsewhere
 from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
@@ -573,4 +574,76 @@ def get_archived_patients(request):
     
     return Response(data)
 
- 
+@api_view(['POST'])
+def store_fingerprint(request):
+    """
+    Store fingerprint template sent from Raspberry Pi.
+    Example JSON: {"patient_id": "P-20251107-001", "template": "<base64_string>"}
+    """
+    patient_id = request.data.get("patient_id")
+    template_b64 = request.data.get("template")
+
+    if not patient_id or not template_b64:
+        return Response({"error": "Missing patient_id or template"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        patient = Patient.objects.get(patient_id=patient_id)
+        # Decode the base64 template
+        template_bytes = base64.b64decode(template_b64)
+        patient.fingerprint_template = template_bytes
+        patient.save()
+        return Response({"message": "Fingerprint template stored successfully!"})
+    except Patient.DoesNotExist:
+        return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+def verify_fingerprint(request):
+    """
+    Called by Raspberry Pi when a fingerprint is matched.
+    Example data: {"user_id": "8", "score": "70"}
+    """
+    user_id = request.data.get("user_id")
+    score = request.data.get("score")
+
+    if not user_id or not score:
+        return Response({"error": "Missing user_id or score"}, status=400)
+
+    try:
+        # Match the fingerprint ID with a patient
+        patient = Patient.objects.get(fingerprint_id=user_id)
+        patient.last_visit = timezone.now()
+        patient.save()
+        return Response({
+            "message": f"Fingerprint match successful for {patient.first_name} {patient.last_name}",
+            "patient_id": patient.patient_id,
+            "score": score
+        }, status=200)
+    except Patient.DoesNotExist:
+        return Response({"error": f"No patient found with fingerprint_id {user_id}"}, status=404)
+
+# Add this to your views.py
+@api_view(['POST'])
+def fingerprint_match_notification(request):
+    """
+    Called by the fingerprint scanner management command
+    when a match is found (optional - for real-time notifications)
+    """
+    fingerprint_id = request.data.get('fingerprint_id')
+    confidence = request.data.get('confidence')
+    
+    try:
+        patient = Patient.objects.get(fingerprint_id=fingerprint_id)
+        
+        # You could trigger websocket notifications here
+        # or update a cache for frontend polling
+        
+        return Response({
+            'status': 'success',
+            'patient_id': patient.patient_id,
+            'name': f'{patient.first_name} {patient.last_name}'
+        })
+    except Patient.DoesNotExist:
+        return Response({
+            'status': 'unknown',
+            'message': 'Fingerprint not registered'
+        }, status=404)
