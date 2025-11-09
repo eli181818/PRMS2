@@ -102,17 +102,30 @@ class VitalSigns(models.Model):
         
         super().save(*args, **kwargs)
 
+from django.db import models
+from django.utils import timezone
+
 class QueueEntry(models.Model):
+    STATUS_CHOICES = [
+        ('WAITING', 'Waiting'),
+        ('SERVING', 'Currently Being Served'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
     PRIORITY_CHOICES = [
         ('CRITICAL', 'Critical'),
         ('HIGH', 'High'),
         ('MEDIUM', 'Medium'),
         ('NORMAL', 'Normal'),
     ]
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='queue_entries')
+    
+    patient = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='queue_entries')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, null=True, blank=True)
     entered_at = models.DateTimeField(default=timezone.now)
     queue_number = models.CharField(max_length=10, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='WAITING')
+    served_at = models.DateTimeField(null=True, blank=True)  # Track when completed
     
     class Meta:
         ordering = ['-entered_at']
@@ -124,6 +137,7 @@ class QueueEntry(models.Model):
         
         # Auto-compute priority on save (if not set)
         if not self.priority:
+            from .utils import compute_patient_priority
             self.priority = compute_patient_priority(self.patient)
         
         # Assign queue number based on priority
@@ -135,7 +149,7 @@ class QueueEntry(models.Model):
             
             if is_priority:
                 # Priority patients: 300-999
-                # Find the highest priority queue number today
+                # Find the highest priority queue number today (including completed ones)
                 highest_priority = QueueEntry.objects.filter(
                     entered_at__date=today,
                     queue_number__gte='300',
@@ -156,7 +170,7 @@ class QueueEntry(models.Model):
                 self.queue_number = str(next_num)
             else:
                 # Normal patients: 001-299
-                # Find the highest normal queue number today
+                # Find the highest normal queue number today (including completed ones)
                 highest_normal = QueueEntry.objects.filter(
                     entered_at__date=today,
                     queue_number__gte='001',
@@ -177,6 +191,17 @@ class QueueEntry(models.Model):
                 self.queue_number = f"{next_num:03d}"
         
         super().save(*args, **kwargs)
+    
+    def mark_completed(self):
+        """Mark this queue entry as completed"""
+        self.status = 'COMPLETED'
+        self.served_at = timezone.now()
+        self.save()
+    
+    def mark_serving(self):
+        """Mark this queue entry as currently being served"""
+        self.status = 'SERVING'
+        self.save()
 
         
               

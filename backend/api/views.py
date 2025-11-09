@@ -426,17 +426,19 @@ def get_patient_vitals_by_id(request, patient_id): # <-- NEW FUNCTION
         
     except Patient.DoesNotExist:
         return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
-# Remove the DUPLICATE QueueViewSet class and keep only this one:
 
+# Remove the DUPLICATE QueueViewSet class and keep only this one:
 class QueueViewSet(viewsets.ModelViewSet):
     queryset = QueueEntry.objects.all()
     serializer_class = QueueEntrySerializer
-    permission_classes = [AllowAny]  # Restrict in production
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def current_queue(self, request):
-        """Get sorted queue: Prioritize by priority level, then entered_at (earliest first)."""
-        queue = QueueEntry.objects.all().select_related('patient').annotate(
+        """Get sorted queue: Only WAITING patients, prioritized by priority level, then entered_at."""
+        queue = QueueEntry.objects.filter(
+            status='WAITING'  # Only show waiting patients
+        ).select_related('patient').annotate(
             priority_order=Case(
                 When(priority='CRITICAL', then=1),
                 When(priority='HIGH', then=2),
@@ -449,15 +451,82 @@ class QueueViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queue, many=True)
         return Response(serializer.data)
     
+    @action(detail=False, methods=['get'])
+    def all_today(self, request):
+        """Get all queue entries for today (including completed)"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        queue = QueueEntry.objects.filter(
+            entered_at__date=today
+        ).select_related('patient').order_by('-entered_at')
+        
+        serializer = self.get_serializer(queue, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def completed_today(self, request):
+        """Get completed queue entries for today"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        queue = QueueEntry.objects.filter(
+            status='COMPLETED',
+            entered_at__date=today
+        ).select_related('patient').order_by('-served_at')
+        
+        serializer = self.get_serializer(queue, many=True)
+        return Response(serializer.data)
+    
     @action(detail=True, methods=['post'])
     def mark_complete(self, request, pk=None):
         """Mark a queue entry as complete/served"""
         try:
             queue_entry = self.get_object()
-            queue_entry.delete()  # Or you can add a 'completed' field instead
-            return Response({"message": "Patient marked as served"}, status=status.HTTP_200_OK)
+            queue_entry.mark_completed()  # Use the model method
+            return Response({
+                "message": "Patient marked as served",
+                "queue_number": queue_entry.queue_number,
+                "served_at": queue_entry.served_at
+            }, status=status.HTTP_200_OK)
         except QueueEntry.DoesNotExist:
-            return Response({"error": "Queue entry not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Queue entry not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def mark_serving(self, request, pk=None):
+        """Mark a queue entry as currently being served"""
+        try:
+            queue_entry = self.get_object()
+            queue_entry.mark_serving()
+            return Response({
+                "message": "Patient marked as being served",
+                "queue_number": queue_entry.queue_number
+            }, status=status.HTTP_200_OK)
+        except QueueEntry.DoesNotExist:
+            return Response(
+                {"error": "Queue entry not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a queue entry"""
+        try:
+            queue_entry = self.get_object()
+            queue_entry.status = 'CANCELLED'
+            queue_entry.save()
+            return Response({
+                "message": "Queue entry cancelled",
+                "queue_number": queue_entry.queue_number
+            }, status=status.HTTP_200_OK)
+        except QueueEntry.DoesNotExist:
+            return Response(
+                {"error": "Queue entry not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 @api_view(['POST'])
 def logout(request):

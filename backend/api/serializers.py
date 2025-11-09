@@ -59,7 +59,16 @@ class QueueEntrySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = QueueEntry
-        fields = ['id', 'patient', 'priority', 'entered_at', 'queue_number', 'latest_vitals'] 
+        fields = [
+            'id', 
+            'patient', 
+            'priority', 
+            'entered_at', 
+            'queue_number', 
+            'status',  # Include status
+            'served_at',  # Include served_at
+            'latest_vitals'
+        ] 
     
     def get_latest_vitals(self, obj):
         """Get the latest vital signs for the patient in this queue entry"""
@@ -67,8 +76,12 @@ class QueueEntrySerializer(serializers.ModelSerializer):
         
         # Get today's date range
         today = timezone.now().date()
-        today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
-        today_end = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+        today_start = timezone.make_aware(
+            timezone.datetime.combine(today, timezone.datetime.min.time())
+        )
+        today_end = timezone.make_aware(
+            timezone.datetime.combine(today, timezone.datetime.max.time())
+        )
         
         # Get latest vitals from today
         latest_vital = VitalSigns.objects.filter(

@@ -1,4 +1,5 @@
-// TO BE REVISEDDDD, PARANG may mali pa sa priority handling....
+// Queue Management with Status Tracking (WAITING/COMPLETED)
+// UI/UX matches QueueManagement1.jsx, backend uses status filtering
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -6,7 +7,8 @@ import priorityIcon from '../assets/disabled.png'
 import nextIcon from '../assets/next.png'
 import listIcon from '../assets/list.png'
 import searchIcon from '../assets/search.png'
-//import backIcon from '../assets/arrow.png'
+import backIcon from '../assets/arrow.png'
+
 
 const API_URL = 'http://localhost:8000'
 
@@ -28,10 +30,9 @@ export default function QueueManagement() {
   const tableRef = useRef(null)
 
   const currentEntry = queue[now]
-  // Use 'queue_number' from database
   const currentNumber = useMemo(() => currentEntry?.queue_number ?? '—', [currentEntry])
 
-  // Fetch queue data with embedded vitals from backend
+  // Fetch queue data (only WAITING patients from backend)
   const fetchQueue = async () => {
     try {
       setLoading(true)
@@ -45,18 +46,18 @@ export default function QueueManagement() {
       // Transform backend data to match component format
       const transformedQueue = (Array.isArray(data) ? data : []).map((entry, index) => {
         const patient = entry.patient
-        const vitals = entry.latest_vitals || {} // server-provided vitals snapshot
+        const vitals = entry.latest_vitals || {}
 
         return {
           id: entry.id,
           queueId: entry.id,
 
           // Use the actual queue number from database
-          queue_number: entry.queue_number || '000',  // Uses 001-299 or 300-999
+          queue_number: entry.queue_number || '000',
 
-          // priority fields (either from BE or left falsy)
-          priority: (entry.priority || 'NORMAL').toUpperCase(),  // 'PRIORITY' | 'NORMAL'
-          priority_code: entry.priority_code || null,            // e.g. 'E07'
+          // priority fields
+          priority: (entry.priority || 'NORMAL').toUpperCase(),
+          priority_code: entry.priority_code || null,
 
           patientId: patient?.patient_id || '—',
           patientDbId: patient?.id,
@@ -161,54 +162,29 @@ export default function QueueManagement() {
     })
   }, [queue, query])
 
-  // Reusable: Queue number cell with PRIORITY badge + E##
+  // Reusable: Queue number cell - just display the number
   const QueueNumberCell = ({ rec }) => {
-    const isPriority = rec.priority === 'PRIORITY'
     return (
-      <div className="flex items-center justify-center gap-2">
-        {isPriority && (
-          <span className="inline-flex items-center gap-1">
-            <span className="rounded-md bg-red-600 px-2 py-[2px] text-[10px] font-bold uppercase tracking-wide text-white">
-              Priority
-            </span>
-            {rec.priority_code && (
-              <span className="font-mono text-xs text-red-700">{rec.priority_code}</span>
-            )}
-          </span>
-        )}
-        <span className={`tabular-nums ${isPriority ? 'ml-1' : ''}`}>{rec.queue_number}</span>
-
+      <div className="flex items-center justify-center">
+        <span className="tabular-nums">{rec.queue_number}</span>
       </div>
     )
   }
 
-  // Reusable: Now Serving badge for current entry
+  // Reusable: Now Serving badge - removed (no longer display priority badge)
   const NowServingBadge = () => {
-    if (!currentEntry) return null
-    if (currentEntry.priority !== 'PRIORITY') return null
-    return (
-      <div className="mt-2 inline-flex items-center gap-2">
-        <span className="rounded-md bg-red-600 px-2 py-[2px] text-[10px] font-bold uppercase tracking-wide text-white">
-          Priority
-        </span>
-        {currentEntry.priority_code && (
-          <span className="font-mono text-xs text-red-700">{currentEntry.priority_code}</span>
-        )}
-      </div>
-    )
+    return null
   }
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-10">
-      {/* Back button - UNCOMMENT IF NEEDED
-      <button
-        onClick={() => nav(-1)}
-        className="flex items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 shadow mb-6"
-      >
-        <img src={backIcon} alt="Back" className="h-4 w-4 object-contain" />
-        <span className="text-sm font-medium">Back</span>
-      </button> */}
-
+    {/* Back button */}
+    <button
+      onClick={() => nav(-1)}
+      className="flex items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50 shadow mb-6">
+      <img src={backIcon} alt="Back" className="h-4 w-4 object-contain" />
+      <span className="text-sm font-medium">Back</span>
+    </button>
       {/* Header */}
       <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-[#406E65]">
         Queue Management
@@ -223,7 +199,6 @@ export default function QueueManagement() {
               {loading ? '...' : currentNumber}
             </span>
           </div>
-          <NowServingBadge />
           <div className="text-sm text-emerald-800/80 mt-4">
             Now Serving
           </div>
@@ -309,7 +284,6 @@ export default function QueueManagement() {
                 {filtered.map((r, i) => {
                   const vitals = getPatientVitals(r)
                   const bmi = r.vitals.bmi || calcBmi(r.vitals.height, r.vitals.weight)
-                  const isPriority = r.priority === 'PRIORITY'
 
                   return (
                     <tr
@@ -319,14 +293,11 @@ export default function QueueManagement() {
                       style={{
                         background: i === now ? '#CFE6E1' : '#DCEBE8',
                         color: '#406E65',
-                        outline: isPriority ? '2px solid rgba(220,38,38,.35)' : 'none',
-                        outlineOffset: '-2px',
                       }}
                       title={i === now ? 'Selected' : 'Click to select'}
                       aria-selected={i === now}
                     >
                       <td className="px-4 py-3 font-semibold text-center">
-                        {/* PRIORITY badge + E## + queue number */}
                         <QueueNumberCell rec={r} />
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{r.patientId}</td>
@@ -357,15 +328,15 @@ export default function QueueManagement() {
           )}
         </div>
 
-      {/* Results Count*/}
-      {!loading && queue.length > 0 && filtered.length > 0 && (
-        <div className="mt-4 text-sm text-slate-600 text-center">
-          Showing <span className="font-semibold">{filtered.length}</span>
-          {' '}out of{' '}
-          <span className="font-semibold">{queue.length}</span>
-          {' '}patient{queue.length === 1 ? '' : 's'}.
-        </div>
-      )}
+        {/* Results Count */}
+        {!loading && queue.length > 0 && filtered.length > 0 && (
+          <div className="mt-4 text-sm text-slate-600 text-center">
+            Showing <span className="font-semibold">{filtered.length}</span>
+            {' '}out of{' '}
+            <span className="font-semibold">{queue.length}</span>
+            {' '}patient{queue.length === 1 ? '' : 's'}.
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex justify-end gap-3 p-5">
