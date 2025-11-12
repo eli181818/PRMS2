@@ -101,8 +101,8 @@ export default function Records() {
         setProfile({
           first_name: patientData.first_name,
           last_name: patientData.last_name,
-          middle_initial: patientData.middle_initial,
-          name: `${patientData.first_name}${patientData.middle_initial ? ' ' + patientData.middle_initial + '.' : ''} ${patientData.last_name}`,
+          middle_name: patientData.middle_name,
+          name: `${patientData.first_name}${patientData.middle_name ? ' ' + patientData.middle_name.charAt(0).toUpperCase() + '.' : ''} ${patientData.last_name}`,
           patientId: patientData.patient_id,
           contact: patientData.contact,
           dob: patientData.birthdate,

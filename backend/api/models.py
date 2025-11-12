@@ -25,7 +25,7 @@ class HCStaff(models.Model):
 class Patient(models.Model):    
     patient_id = models.CharField(max_length=15, unique=True, primary_key=True)
     first_name = models.CharField(max_length=50)
-    middle_initial = models.CharField(max_length=50, null=True, blank=True)
+    middle_name = models.CharField(max_length=50, null=True, blank=True)
     last_name = models.CharField(max_length=50)
     sex = models.CharField(max_length=6, choices=[('Male', 'Male'), ('Female', 'Female')])
     contact = models.CharField(max_length=11, default='N/A')
@@ -208,7 +208,7 @@ class QueueEntry(models.Model):
 class ArchivedPatient(models.Model):
     patient_id = models.CharField(max_length=15, primary_key=True)
     first_name = models.CharField(max_length=50)
-    middle_initial = models.CharField(max_length=50, null=True, blank=True)
+    middle_name = models.CharField(max_length=50, null=True, blank=True)
     last_name = models.CharField(max_length=50)
     sex = models.CharField(max_length=6)
     contact = models.CharField(max_length=11)
@@ -285,7 +285,7 @@ def archive_patient(patient_id, staff=None, reason=None):
         archived_patient = ArchivedPatient.objects.create(
             patient_id=patient.patient_id,
             first_name=patient.first_name,
-            middle_initial=patient.middle_initial,
+            middle_name=patient.middle_name,
             last_name=patient.last_name,
             sex=patient.sex,
             contact=patient.contact,
@@ -354,7 +354,7 @@ def restore_patient(patient_id):
         patient = Patient.objects.create(
             patient_id=archived_patient.patient_id,
             first_name=archived_patient.first_name,
-            middle_initial=archived_patient.middle_initial,
+            middle_name=archived_patient.middle_name,
             last_name=archived_patient.last_name,
             sex=archived_patient.sex,
             contact=archived_patient.contact,

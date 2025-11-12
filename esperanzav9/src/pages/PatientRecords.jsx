@@ -27,20 +27,69 @@ export default function PatientRecords() {
   const [history, setHistory] = useState([])
   const [bpInput, setBpInput] = useState('')
 
+
   const constructName = (patient) => {
     if (patient.name) return patient.name
-    const parts = [patient.first_name, patient.middle_initial, patient.last_name].filter(Boolean)
-    if (patient.middle_initial) {
-      return `${patient.first_name} ${patient.middle_initial}. ${patient.last_name}`
-    }
+    const parts = [patient.first_name, patient.middle_name, patient.last_name].filter(Boolean)
     return parts.join(' ') || '—'
   }
 
-  useEffect(() => {
-    const searchTerm = searchParams.get('q') || ''
-    setQuery(searchTerm)
-    fetchPatients(searchTerm)
-  }, [searchParams])
+  const saveProfile = async () => {
+  if (!currentPatient) return
+  
+  try {
+    const first_name = (currentPatient.first_name || '').trim()
+    const middle_name = (currentPatient.middle_name || '').trim() // Remove .charAt(0)
+    const last_name = (currentPatient.last_name || '').trim()
+
+    const payload = {
+      first_name: first_name || 'Unknown',
+      last_name: last_name || 'Unknown', 
+      sex: currentPatient.sex || 'Male',
+      address: currentPatient.address || '',
+      contact: currentPatient.contact || '',
+      pin: currentPatient.pin,
+    }
+    
+    if (middle_name) {
+      payload.middle_name = middle_name || ''
+    }
+    if (currentPatient.birthdate) {
+      payload.birthdate = currentPatient.birthdate
+    }
+
+    const res = await fetch(`http://localhost:8000/patients/${currentPatient.patient_id}/`, {
+      method: 'PATCH', 
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      const errorData = await res.json()
+      let errorMsg = 'Failed to update patient'
+      if (errorData.detail) {
+        errorMsg = errorData.detail
+      } else if (typeof errorData === 'object') {
+        const errors = Object.entries(errorData).map(([field, msgs]) => 
+          `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`
+        ).join('\n')
+        errorMsg = errors || errorMsg
+      }
+      
+      throw new Error(errorMsg)
+    }
+
+    alert('Patient record updated successfully')
+    setEditing(false)
+    
+    const currentSearch = searchParams.get('q') || ''
+    fetchPatients(currentSearch)
+  } catch (err) {
+    console.error('Failed to save:', err)
+    alert(`Failed to save record: ${err.message}`)
+  }
+}
 
   const fetchPatients = async (searchTerm = '') => {
     setLoading(true)
@@ -54,7 +103,6 @@ export default function PatientRecords() {
 
       setPatients(data)
 
-      // For total count display, only set when no search term
       if (!searchTerm) {
         setTotalCount(Array.isArray(data) ? data.length : 0)
       }
@@ -86,7 +134,6 @@ export default function PatientRecords() {
       }
 
       const data = await res.json()
-      
       setLatestVitals(data.latest || null)
       setHistory(data.history || [])
       
@@ -138,6 +185,28 @@ export default function PatientRecords() {
     setBpInput((latestVitals?.blood_pressure ?? '').toString())
   }, [editing, latestVitals])
 
+    // Add missing state
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [patientToArchive, setPatientToArchive] = useState(null)
+
+  // Add missing components
+  const Title = ({ children }) => (
+    <h1 className="text-3xl font-bold text-center" style={{ color: BRAND.text }}>{children}</h1>
+  )
+  const GradientHeader = ({ icon, children }) => (
+    <div className="mt-6 flex items-center gap-3">
+      <img src={icon} alt="" className="h-6 w-6" />
+      <h2 className="text-xl font-bold" style={{ color: BRAND.text }}>{children}</h2>
+    </div>
+  )
+  const SectionHeader = ({ children }) => (
+    <h3 className="text-lg font-semibold" style={{ color: BRAND.text }}>{children}</h3>
+  )
+
+  useEffect(() => {
+  const searchTerm = searchParams.get('q') || ''
+  fetchPatients(searchTerm)
+}, [searchParams])
 
   const handleSearch = () => {
     if (query.trim()) {
@@ -150,63 +219,6 @@ export default function PatientRecords() {
   const handleClear = () => {
     setQuery('')
     setSearchParams({})
-  }
-
-  const saveProfile = async () => {
-    if (!currentPatient) return
-    
-    try {
-      const first_name = (currentPatient.first_name || '').trim()
-      const middle_initial = (currentPatient.middle_initial || '').trim().charAt(0)
-      const last_name = (currentPatient.last_name || '').trim()
-
-      const payload = {
-        first_name: first_name || 'Unknown',
-        last_name: last_name || 'Unknown', 
-        sex: currentPatient.sex || 'Male',
-        address: currentPatient.address || '',
-        contact: currentPatient.contact || '',
-        pin: currentPatient.pin,
-      }
-      
-      if (middle_initial) {
-        payload.middle_initial = middle_initial
-      }
-      if (currentPatient.birthdate) {
-        payload.birthdate = currentPatient.birthdate
-      }
-
-      const res = await fetch(`http://localhost:8000/patients/${currentPatient.patient_id}/`, {
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        let errorMsg = 'Failed to update patient'
-        if (errorData.detail) {
-          errorMsg = errorData.detail
-        } else if (typeof errorData === 'object') {
-          const errors = Object.entries(errorData).map(([field, msgs]) => 
-            `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`
-          ).join('\n')
-          errorMsg = errors || errorMsg
-        }
-        
-        throw new Error(errorMsg)
-      }
-
-      alert('Patient record updated successfully')
-      setEditing(false)
-      
-      const currentSearch = searchParams.get('q') || ''
-      fetchPatients(currentSearch)
-    } catch (err) {
-      console.error('Failed to save:', err)
-      alert(`Failed to save record: ${err.message}`)
-    }
   }
 
   const saveBp = async () => {
@@ -250,9 +262,9 @@ export default function PatientRecords() {
     const patientToEdit = {
       ...patient,
       first_name: patient.first_name || '',
-      middle_initial: patient.middle_initial || '',
+      middle_name: patient.middle_name || '',
       last_name: patient.last_name || '',
-      sex: patient.sex || patient.sex || 'Male',
+      sex: patient.sex || 'Male',
       birthdate: patient.birthdate || patient.dob || '',
     }
     
@@ -271,95 +283,7 @@ export default function PatientRecords() {
     }
   }
 
-  const Title = ({ children }) => (
-    <h2
-      className="text-3xl md:text-4xl font-extrabold tracking-tight text-center"
-      style={{
-        backgroundImage: `linear-gradient(90deg, ${BRAND.text}, #10B981)`,
-        WebkitBackgroundClip: 'text',
-        color: 'transparent',
-      }}
-    >
-      {children}
-    </h2>
-  )
-
-  const GradientHeader = ({ children, icon }) => (
-    <div className="flex items-center gap-3 mt-6 rounded-2xl px-6 py-3 bg-transparent shadow-none">
-      {icon && <img src={icon} alt="" className="h-7 w-7 opacity-80" />}
-      <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-500 via-teal-500 to-slate-600 bg-clip-text text-transparent">
-        {children}
-      </h2>
-    </div>
-  )
-
-  const SectionHeader = ({ children }) => (
-    <div className="rounded-xl px-4 py-2 font-extrabold"
-         style={{ background: BRAND.bg, color: BRAND.text, border: `1px solid ${BRAND.border}` }}>
-      {children}
-    </div>
-  )
-
-  // Archive Modal State and Handlers
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [targetPatientId, setTargetPatientId] = useState(null); 
-
-  const archivePatient = async (patientId) => {
-    try {
-      const res = await fetch(`http://localhost:8000/archive-patient/${patientId}/`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to archive patient record');
-      }
-      
-      alert('Patient record archived successfully.');
-    } catch (e) {
-      console.error('Failed to archive patient data:', e);
-      alert(`Failed to archive record: ${e.message}`);
-      throw e; 
-    }
-  };
-
-  const handleArchiveClick = (patientId) => { 
-    setTargetPatientId(patientId);
-    setShowArchiveModal(true);
-  };
-
-  const confirmArchive = async () => {
-    if (!targetPatientId) return;
-
-    try {
-      await archivePatient(targetPatientId);
-      
-      setCurrentPatient(null);
-      setLatestVitals(null);
-      setHistory([]);
-      setEditing(false);
-      
-      fetchPatients(query.trim());
-
-      setShowArchiveModal(false);
-      setTargetPatientId(null);
-      
-      nav('/staff/patient-records', { replace: true });
-    } catch (e) {
-      setShowArchiveModal(false);
-      setTargetPatientId(null);
-    }
-  };
-
-  const cancelArchive = () => {
-    setShowArchiveModal(false);
-    setTargetPatientId(null);
-  };
-
-  // For showing total count of patients
-  const [totalCount, setTotalCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0)
 
   return (
     <section className="relative mx-auto max-w-5xl px-2 py-16">
@@ -478,14 +402,14 @@ export default function PatientRecords() {
                             required
                           />
                         </td>
-                        <th className="px-4 py-3 text-left w-40">Middle Initial</th>
+                        <th className="px-4 py-3 text-left w-40">Middle Name</th>
                         <td className="px-4 py-3">
                           <input
-                            value={currentPatient.middle_initial || ''}
+                            value={currentPatient.middle_name || ''}
                             onChange={(e) =>
-                              setCurrentPatient({ ...currentPatient, middle_initial: e.target.value })
+                              setCurrentPatient({ ...currentPatient, middle_name: e.target.value })
                             }
-                            maxLength={1}
+                            maxLength={50}
                             placeholder="Optional"
                             className="w-full rounded-lg border px-3 py-2 bg-white"
                             style={{ borderColor: BRAND.border }}

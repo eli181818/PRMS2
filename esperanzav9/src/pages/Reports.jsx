@@ -69,11 +69,11 @@ export default function Reports() {
   }
 
   const constructName = (patient) => {
-    const parts = [patient.first_name, patient.middle_initial, patient.last_name].filter(Boolean)
-    if (patient.middle_initial) {
-      return `${patient.first_name} ${patient.middle_initial}. ${patient.last_name}`
-    }
-    return parts.join(' ') || '—'
+    const first = patient.first_name || ''
+    const middle = patient.middle_name ? patient.middle_name.charAt(0).toUpperCase() + '.' : ''
+    const last = patient.last_name || ''
+    const fullName = [first, middle, last].filter(Boolean).join(' ')
+    return fullName || '—'
   }
 
   const formatDate = (dateStr) => {

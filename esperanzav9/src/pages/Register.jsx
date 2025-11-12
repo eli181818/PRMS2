@@ -20,13 +20,21 @@ export default function Register() {
 
   // Name fields
   const [first_name, setFirstName] = useState('')
-  const [middle_initial, setMiddleInitial] = useState('')
+  const [middle_name, setMiddleName] = useState('')
   const [last_name, setLastName] = useState('')
 
   // Demographics
   const [sex, setSex] = useState('Male')
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
+
+  // Address object state
+  const [address, setAddress] = useState({
+    street: '',
+    barangay: '',
+    city: 'Manila',
+    region: 'NCR',
+    country: 'Philippines'
+  })
 
   // Birthdate
   const [month, setMonth] = useState(months[0])
@@ -81,12 +89,12 @@ export default function Register() {
 
     const patientProfile = {
       first_name: first_name.trim(),
-      middle_initial: middle_initial.trim(),
+      middle_name: middle_name.trim(),
       last_name: last_name.trim(),
       sex,
       birthdate: dob,
       contact: phone.trim(),
-      address: address.trim(),
+      address: `${address.street}, ${address.barangay}, ${address.city}, ${address.region}, ${address.country}`,
       username: username.trim(),
       pin
     }
@@ -169,15 +177,12 @@ export default function Register() {
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold text-slate-700">Middle Initial</label>
+                <label className="text-sm font-semibold text-slate-700">Middle Name</label>
                 <input
-                  value={middle_initial}
-                  onChange={e=>{
-                    const v = e.target.value.replace(/[^A-Za-z]/g,'').slice(0,1).toUpperCase()
-                    setMiddleInitial(v)
+                  value={middle_name}
+                  onChange={e=>{setMiddleName(e.target.value)
                   }}
-                  maxLength={1}
-                  placeholder="A (optional)"
+                  placeholder="(optional)"
                   className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
                 />
               </div>
@@ -236,26 +241,80 @@ export default function Register() {
             </div>
 
             {/* Contact / Address */}
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-[1fr,2fr] gap-2 items-start md:items-center">
+              {/* Phone */}
               <div>
                 <label className="text-sm font-semibold text-slate-700">Phone Number</label>
                 <input
                   value={phone}
-                  onChange={e=>setPhone(e.target.value)}
+                  onChange={e => setPhone(e.target.value)}
                   required
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5"
                 />
               </div>
+
+              {/* Address Section */}
               <div className="md:col-span-2">
-                <label className="text-sm font-semibold text-slate-700">Address</label>
-                <input
-                  value={address}
-                  onChange={e=>setAddress(e.target.value)}
-                  required
-                  className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                />
+                <label className="text-sm font-semibold text-slate-700 block mb-2">Address</label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Street */}
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Street / Building / House No."
+                      value={address.street}
+                      onChange={e => setAddress({ ...address, street: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                      required
+                    />
+                  </div>
+
+                  {/* Barangay */}
+                  <div>
+                    <select
+                      value={address.barangay}
+                      onChange={e => setAddress({ ...address, barangay: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                      required
+                    >
+                      <option value="">Select Barangay</option>
+                      {Array.from({ length: 648 - 587 + 1 }, (_, i) => 587 + i).map(brgy => (
+                        <option key={brgy} value={`Barangay ${brgy}`}>
+                          Barangay {brgy}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* City / Region / Country on same row */}
+                  <div className="grid grid-cols-3 gap-4 col-span-2">
+                    {/* City */}
+                    <input
+                      type="text"
+                      value="Manila"
+                      readOnly
+                      className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
+                    />
+                    {/* Region */}
+                    <input
+                      type="text"
+                      value="NCR"
+                      readOnly
+                      className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
+                    />
+                    {/* Country */}
+                    <input
+                      type="text"
+                      value="Philippines"
+                      readOnly
+                      className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
+
 
             {/* Username / PIN */}
             <div className="grid md:grid-cols-2 gap-6">
@@ -281,18 +340,15 @@ export default function Register() {
                     type={showPin ? 'text' : 'password'}
                     className="mt-0 w-full rounded-xl border border-slate-300 px-4 py-2.5 pr-12"
                     autoComplete="new-password"
-                    aria-label="4-digit PIN"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPin(s => !s)}
                     className="absolute inset-y-0 right-2 my-auto h-9 w-9 grid place-items-center rounded-md hover:bg-slate-100"
-                    aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
-                    title={showPin ? 'Hide PIN' : 'Show PIN'}
                   >
                     <img
                       src={showPin ? hidePinIcon : showPinIcon}
-                      alt={showPin ? 'Hide PIN' : 'Show PIN'}
+                      alt="toggle pin"
                       className="h-5 w-5 object-contain select-none pointer-events-none"
                     />
                   </button>
@@ -311,13 +367,12 @@ export default function Register() {
             </div>
           </form>
 
-          {/* Biometric card (DEMO only) */}
+          {/* Biometric Card (Demo Only) */}
           <aside className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
             <h3 className="text-lg font-extrabold text-emerald-800">Biometric Enrollment</h3>
             <p className="mt-1 text-sm text-emerald-900/80">
               Capture the patient’s fingerprint. Placeholder only — will wire up the sensor later.
             </p>
-
             <div className="mt-5 grid place-items-center">
               <div className="h-32 w-32 rounded-full bg-white border-2 border-emerald-300 grid place-items-center overflow-hidden">
                 {fpStatus === 'capturing' && <div className="h-8 w-8 animate-ping rounded-full bg-emerald-400" />}
@@ -327,7 +382,6 @@ export default function Register() {
                 )}
               </div>
             </div>
-
             <div className="mt-4">
               <p className="text-sm">
                 Status:{' '}
@@ -341,7 +395,6 @@ export default function Register() {
                 </span>
               </p>
             </div>
-
             <div className="mt-5 flex flex-wrap gap-3">
               {fpStatus !== 'capturing' && (
                 <button
