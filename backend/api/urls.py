@@ -7,7 +7,8 @@ from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login,
                     get_archived_patients, store_fingerprint, verify_fingerprint, 
                     start_fingerprint_enrollment,
                     check_enrollment_status, delete_fingerprint, get_fingerprint_count,
-                    start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan
+                    start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan,
+                    print_patient_vitals, print_queue_ticket, print_to_pos58
                 )
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -51,7 +52,19 @@ urlpatterns = [ # endpoints
     path('fingerprint/scan/', start_fingerprint_scan, name='start_fingerprint_scan'),
     path('fingerprint/match/', check_fingerprint_match, name='check_fingerprint_match'),
     path('fingerprint/stop/', stop_fingerprint_scan, name='stop_fingerprint_scan'),
+    path('print/vitals/<str:patient_id>/', views.print_patient_vitals, name='print_patient_vitals'),
+    path('print/queue-ticket/', views.print_queue_ticket, name='print_queue_ticket'),
+    # Fingerprint match callback (optional)
+    path('fingerprint/match/notify/', views.fingerprint_match_notification, name='fingerprint_match_notification'),
+
+    path('print-vitals/<str:patient_id>/', print_patient_vitals, name='print_vitals'),
+    path('print-vitals/', print_patient_vitals, name='print_vitals_post'),  # POST version
+    path('print-queue-ticket/', print_queue_ticket, name='print_queue_ticket'),
+
+    path("print-pos58/", print_to_pos58, name='print_to_pos58'),
+
 ]
+
 
 
 
