@@ -854,6 +854,54 @@ def print_patient_vitals(request, patient_id=None):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+@api_view(['POST'])
+def print_to_pos58(request):
+    """
+    Send simple receipt text directly to thermal printer (58mm).
+    Expects: {"patient_id": "P-20251107-001"}
+    """
+    patient_id = request.data.get("patient_id")
+    if not patient_id:
+        return Response({"error": "patient_id required"}, status=400)
+
+    try:
+        patient = Patient.objects.get(patient_id=patient_id)
+        latest_vital = VitalSigns.objects.filter(patient=patient).order_by('-date_time_recorded').first()
+
+        if not latest_vital:
+            return Response({"error": "No vitals found"}, status=404)
+
+        receipt = f"""
+=============================
+  ESPERANZA HEALTH CENTER
+=============================
+Patient: {patient.first_name} {patient.last_name}
+ID: {patient.patient_id}
+
+TEMP: {latest_vital.temperature or '—'} °C
+PULSE: {latest_vital.heart_rate or '—'} bpm
+SPO2: {latest_vital.oxygen_saturation or '—'} %
+HEIGHT: {latest_vital.height or '—'} cm
+WEIGHT: {latest_vital.weight or '—'} kg
+BP: {latest_vital.blood_pressure or '—'}
+
+Thank you for visiting!
+=============================
+
+"""
+
+        PRINTER_PATH = "/dev/usb/lp0"
+        with open(PRINTER_PATH, "w") as printer:
+            printer.write(receipt + "\n\n\n")
+
+        return Response({"message": "Printed successfully!"}, status=200)
+
+    except Patient.DoesNotExist:
+        return Response({"error": "Patient not found"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
 
 def get_priority_code(priority):
     """Get color code for priority level"""

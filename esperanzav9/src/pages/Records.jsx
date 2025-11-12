@@ -475,36 +475,51 @@ export default function Records() {
     )
   }
 
-  const PrintButtonSection = () => (
+  const PrintButtonSection = () => {
+  const handlePrintToPOS58 = async () => {
+    try {
+      const patientId = profile?.patientId || sessionStorage.getItem('patient_id');
+      if (!patientId) {
+        alert("Patient ID not found.");
+        return;
+      }
+
+      const res = await fetch("http://localhost:8000/print-pos58/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: patientId }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert("🖨️ Printed successfully to POS58 printer!");
+      } else {
+        alert("⚠️ Print failed: " + data.error);
+      }
+    } catch (err) {
+      console.error("POS58 print error:", err);
+      alert("Failed to send print command to printer.");
+    }
+  };
+
+  return (
     <div className="mt-8 flex items-center justify-between flex-wrap gap-2">
       <h3 className="text-2xl font-extrabold text-[#406E65]">Your Latest Vitals</h3>
-      
+
       <div className="print:hidden flex gap-2">
-        {/* Browser Print */}
-        <button 
-          onClick={printLatestFromBackend}
-          disabled={isPrinting}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-[#406E65] hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+
+        {/* Print */}
+        <button
+          onClick={handlePrintToPOS58}
+          className="inline-flex items-center gap-2 rounded-xl border border-green-400 bg-white px-4 py-2 text-green-700 hover:bg-green-50"
         >
           <img src={printIcon} alt="" className="h-4 w-4 object-contain" />
-          <span className="font-medium">
-            {isPrinting ? 'Preparing...' : 'Print Vitals'}
-          </span>
-        </button>
-        
-        {/* PDF Download */}
-        <button 
-          onClick={downloadPrintablePDF}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-[#406E65] hover:bg-slate-50"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <span className="font-medium">Download PDF</span>
+          <span className="font-medium">Print</span>
         </button>
       </div>
     </div>
-  )
+  );
+};
 
   // ---------- Loading State ----------
   if (loading || !profile) {
