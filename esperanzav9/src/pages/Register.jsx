@@ -94,9 +94,11 @@ export default function Register() {
       sex,
       birthdate: dob,
       contact: phone.trim(),
-      address: `${address.street}, ${address.barangay}, ${address.city}, ${address.region}, ${address.country}`,
+      street: address.street.trim(),
+      barangay: address.barangay.replace('Barangay ', ''), 
+      // address: `${address.street}, ${address.barangay}, ${address.city}, ${address.region}, ${address.country}`,
       username: username.trim(),
-      pin
+      patient_pin: pin
     }
 
     try {

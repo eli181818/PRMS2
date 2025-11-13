@@ -27,12 +27,12 @@ BAUD_RATE = 9600
 active_serial = None
 active_serial_lock = threading.Lock()
 
-def get_next_fingerprint_id():
-    """Get the next available fingerprint ID (1-127)"""
-    # Get all used fingerprint IDs
+def get_next_biometric_id():
+    """Get the next available biometric ID (1-127)"""
+    # Get all used biometric IDs
     used_ids = set(Patient.objects.filter(
-        fingerprint_id__isnull=False
-    ).values_list('fingerprint_id', flat=True))
+        biometric_id__isnull=False
+    ).values_list('biometric_id', flat=True))
     
     # Find first available ID
     for i in range(1, 128):
@@ -47,9 +47,9 @@ def get_next_fingerprint_id():
 
 
 @api_view(['POST'])
-def start_fingerprint_scan(request):
+def start_biometric_scan(request):
     """
-    Start fingerprint scanning mode for login
+    Start biometric scanning mode for login
     Arduino will continuously scan until a match is found
     """
     ser = get_or_create_serial()
@@ -81,9 +81,9 @@ def start_fingerprint_scan(request):
 
 
 @api_view(['GET'])
-def check_fingerprint_match(request):
+def check_biometric_match(request):
     """
-    Poll for fingerprint match results
+    Poll for biometric match results
     Returns patient data if match found
     """
     ser = get_or_create_serial()
@@ -107,15 +107,15 @@ def check_fingerprint_match(request):
                         
                         # If match found, get patient info
                         if data.get('status') == 'match':
-                            fingerprint_id = str(data.get('id'))
-                            print(f"[DEBUG] Looking for fingerprint_id: '{fingerprint_id}' (type: {type(fingerprint_id)})")  # ← ADD THIS
+                            biometric_id = str(data.get('id'))
+                            print(f"[DEBUG] Looking for biometric_id: '{biometric_id}' (type: {type(biometric_id)})")  # ← ADD THIS
                             
-                            # DEBUG: Show all stored fingerprint IDs
-                            all_fps = Patient.objects.filter(fingerprint_id__isnull=False).values_list('patient_id', 'fingerprint_id')
-                            print(f"[DEBUG] All stored fingerprint IDs: {list(all_fps)}")  # ← ADD THIS
+                            # DEBUG: Show all stored biometric IDs
+                            all_fps = Patient.objects.filter(biometric_id__isnull=False).values_list('patient_id', 'biometric_id')
+                            print(f"[DEBUG] All stored biometric IDs: {list(all_fps)}")  # ← ADD THIS
                             
                             try:
-                                patient = Patient.objects.get(fingerprint_id=fingerprint_id)
+                                patient = Patient.objects.get(biometric_id=biometric_id)
                                 print(f"[DEBUG] Patient found: {patient.first_name} {patient.last_name}")  # ← ADD THIS
                                 
                                 # Create session (auto-login)
@@ -130,15 +130,15 @@ def check_fingerprint_match(request):
                                     "status": "success",
                                     "patient_id": patient.patient_id,
                                     "name": f"{patient.first_name} {patient.last_name}",
-                                    "fingerprint_id": fingerprint_id,
+                                    "biometric_id": biometric_id,
                                     "confidence": data.get('confidence', 0)
                                 })
                                 
                             except Patient.DoesNotExist:
-                                print(f"[DEBUG] No patient found with fingerprint_id='{fingerprint_id}'")  # ← ADD THIS
+                                print(f"[DEBUG] No patient found with biometric_id='{biometric_id}'")  # ← ADD THIS
                                 return Response({
                                     "status": "error",
-                                    "message": f"Fingerprint ID {fingerprint_id} not registered"
+                                    "message": f"biometric ID {biometric_id} not registered"
                                 })
                         
                         # Return Arduino status (scanning, no_match, etc)
@@ -166,9 +166,9 @@ def check_fingerprint_match(request):
 
 
 @api_view(['POST'])
-def stop_fingerprint_scan(request):
+def stop_biometric_scan(request):
     """
-    Stop fingerprint scanning mode
+    Stop biometric scanning mode
     """
     ser = get_or_create_serial()
     if ser is None:
@@ -209,8 +209,8 @@ def get_or_create_serial():
         return active_serial
 
 @api_view(['POST'])
-def start_fingerprint_enrollment(request):
-    """Start fingerprint enrollment process"""
+def start_biometric_enrollment(request):
+    """Start biometric enrollment process"""
     patient_id = request.data.get('patient_id')
     
     if not patient_id:
@@ -222,17 +222,17 @@ def start_fingerprint_enrollment(request):
     try:
         patient = Patient.objects.get(patient_id=patient_id)
         
-        if patient.fingerprint_id:
+        if patient.biometric_id:
             return Response(
-                {"error": f"Patient already has fingerprint ID {patient.fingerprint_id}"}, 
+                {"error": f"Patient already has biometric ID {patient.biometric_id}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        fingerprint_id = get_next_fingerprint_id()
+        biometric_id = get_next_biometric_id()
         
-        if not fingerprint_id:
+        if not biometric_id:
             return Response(
-                {"error": "No available fingerprint slots (maximum 127 reached)"}, 
+                {"error": "No available biometric slots (maximum 127 reached)"}, 
                 status=status.HTTP_507_INSUFFICIENT_STORAGE
             )
         
@@ -250,13 +250,13 @@ def start_fingerprint_enrollment(request):
                 ser.reset_input_buffer()
                 
                 # Send enrollment command
-                command = f"E:{fingerprint_id}\n"
+                command = f"E:{biometric_id}\n"
                 ser.write(command.encode())
                 ser.flush()
             
             return Response({
                 "status": "started",
-                "fingerprint_id": fingerprint_id,
+                "biometric_id": biometric_id,
                 "patient_id": patient_id,
                 "message": "Enrollment started - place finger on sensor"
             })
@@ -277,12 +277,12 @@ def start_fingerprint_enrollment(request):
 @api_view(['GET'])
 def check_enrollment_status(request):
     """Poll Arduino for enrollment status updates"""
-    fingerprint_id = request.query_params.get('fingerprint_id')
+    biometric_id = request.query_params.get('biometric_id')
     patient_id = request.query_params.get('patient_id')
     
-    if not fingerprint_id or not patient_id:
+    if not biometric_id or not patient_id:
         return Response(
-            {"error": "fingerprint_id and patient_id are required"}, 
+            {"error": "biometric_id and patient_id are required"}, 
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -307,13 +307,13 @@ def check_enrollment_status(request):
                         if data.get('status') == 'success':
                             try:
                                 patient = Patient.objects.get(patient_id=patient_id)
-                                patient.fingerprint_id = fingerprint_id
+                                patient.biometric_id = biometric_id
                                 patient.save()
                                 
                                 return Response({
                                     "status": "success",
-                                    "fingerprint_id": fingerprint_id,
-                                    "message": "Fingerprint enrolled and saved to database"
+                                    "biometric_id": biometric_id,
+                                    "message": "biometric enrolled and saved to database"
                                 })
                             except Patient.DoesNotExist:
                                 return Response(
@@ -345,27 +345,27 @@ def check_enrollment_status(request):
         )
 
 @api_view(['DELETE'])
-def delete_fingerprint(request, patient_id):
+def delete_biometric(request, patient_id):
     """
-    Delete a patient's fingerprint from both database and sensor
+    Delete a patient's biometric from both database and sensor
     """
     try:
         patient = Patient.objects.get(patient_id=patient_id)
         
-        if not patient.fingerprint_id:
+        if not patient.biometric_id:
             return Response(
-                {"error": "Patient has no fingerprint enrolled"}, 
+                {"error": "Patient has no biometric enrolled"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        fingerprint_id = patient.fingerprint_id
+        biometric_id = patient.biometric_id
         
         # Delete from sensor
         try:
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
                 time.sleep(2)
                 
-                command = f"DELETE:{fingerprint_id}\n"
+                command = f"DELETE:{biometric_id}\n"
                 ser.write(command.encode())
                 
                 time.sleep(1)
@@ -377,11 +377,11 @@ def delete_fingerprint(request, patient_id):
             print(f"Warning: Could not delete from sensor: {e}")
         
         # Delete from database
-        patient.fingerprint_id = None
+        patient.biometric_id = None
         patient.save()
         
         return Response({
-            "message": f"Fingerprint {fingerprint_id} deleted successfully",
+            "message": f"biometric {biometric_id} deleted successfully",
             "patient_id": patient_id
         })
         
@@ -393,8 +393,8 @@ def delete_fingerprint(request, patient_id):
 
 
 @api_view(['GET'])
-def get_fingerprint_count(request):
-    """Get total number of enrolled fingerprints from sensor"""
+def get_biometric_count(request):
+    """Get total number of enrolled biometrics from sensor"""
     try:
         with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
             time.sleep(2)
@@ -421,7 +421,7 @@ def get_fingerprint_count(request):
 
 latest_vitals = {
     "temperature": None,
-    "heart_rate": None,
+    "pulse_rate": None,
     "spo2": None,
     "height": None,
 }
@@ -471,7 +471,7 @@ def start_vitals(request):
 
             latest_vitals.update({
                 "temperature": data.get("temperature"),
-                "heart_rate": data.get("heart_rate"),
+                "pulse_rate": data.get("pulse_rate"),
                 "spo2": data.get("spo2"),
                 "height": data.get("height")
             })
@@ -505,7 +505,7 @@ def fetch_temperature(request):
 
 
 @api_view(['GET'])
-def fetch_heart_rate(request):
+def fetch_pulse_rate(request):
     """Fetch latest heart rate from Arduino"""
     try:
         with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
@@ -514,13 +514,13 @@ def fetch_heart_rate(request):
                 return Response({"error": "No data"}, status=404)
 
             data = json.loads(line)
-            heart_rate = data.get("heart_rate")
-            if heart_rate is not None:
-                latest_vitals["heart_rate"] = int(heart_rate)
-                print(f"❤️ Heart Rate: {heart_rate} bpm")
-                return Response({"heart_rate": heart_rate})
+            pulse_rate = data.get("pulse_rate")
+            if pulse_rate is not None:
+                latest_vitals["pulse_rate"] = int(pulse_rate)
+                print(f"❤️ Heart Rate: {pulse_rate} bpm")
+                return Response({"pulse_rate": pulse_rate})
             else:
-                return Response({"error": "No heart_rate key"}, status=400)
+                return Response({"error": "No pulse_rate key"}, status=400)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -657,7 +657,7 @@ def update_vitals(request, id):
 @api_view(['POST'])
 def receive_vital_signs(request):
     """
-    Handles vital sign data (weight, height, heart_rate, etc.)
+    Handles vital sign data (weight, height, pulse_rate, etc.)
     Updates existing record for today if incomplete, or creates new one.
     """
     data = request.data
@@ -701,7 +701,7 @@ def receive_vital_signs(request):
             all_filled = all([
                 vital_signs.weight,
                 vital_signs.height,
-                vital_signs.heart_rate,
+                vital_signs.pulse_rate,
                 vital_signs.temperature,
                 vital_signs.oxygen_saturation,
                 vital_signs.blood_pressure,
@@ -718,7 +718,7 @@ def receive_vital_signs(request):
         )
 
     # --- Update only the provided fields ---
-    for field in ['heart_rate', 'temperature', 'oxygen_saturation', 'weight', 'height', 'blood_pressure']:
+    for field in ['pulse_rate', 'temperature', 'oxygen_saturation', 'weight', 'height', 'blood_pressure']:
         if field in data and data[field] is not None:
             setattr(vital_signs, field, data[field])
 
@@ -727,7 +727,7 @@ def receive_vital_signs(request):
     
     all_vitals_complete = all([
         vital_signs.blood_pressure,
-        vital_signs.heart_rate,
+        vital_signs.pulse_rate,
         vital_signs.temperature,
         vital_signs.oxygen_saturation,
         vital_signs.weight,
@@ -759,7 +759,7 @@ def receive_vital_signs(request):
         "data": {
             "id": vital_signs.id,
             "patient_id": patient.patient_id,
-            "heart_rate": vital_signs.heart_rate,
+            "pulse_rate": vital_signs.pulse_rate,
             "temperature": vital_signs.temperature,
             "oxygen_saturation": vital_signs.oxygen_saturation,
             "weight": vital_signs.weight,
@@ -887,7 +887,7 @@ def get_patient_vitals(request):
                 bmi_value = round(latest_vital.weight / (height_m * height_m), 1)
             
             latest_data = {
-                'heart_rate': latest_vital.heart_rate,
+                'pulse_rate': latest_vital.pulse_rate,
                 'temperature': latest_vital.temperature,
                 'spo2': latest_vital.oxygen_saturation,
                 'blood_pressure': None,  # Add blood pressure fields to your model if needed
@@ -900,9 +900,9 @@ def get_patient_vitals(request):
         history_data = []
         for vital in vitals_queryset:
             history_data.append({
-                'id': vital.id,
+                'vitals_id': vital.vitals_id,
                 'date': vital.date_time_recorded.strftime('%Y-%m-%d %H:%M'),
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'blood_pressure': None,  # Add blood pressure fields to your model if needed
                 'temperature': vital.temperature,
                 'spo2': vital.oxygen_saturation,
@@ -948,7 +948,7 @@ def get_patient_vitals_by_id(request, patient_id): # <-- NEW FUNCTION
             
             # Map latest vitals data
             latest_data = {
-                'heart_rate': latest_vital.heart_rate,
+                'pulse_rate': latest_vital.pulse_rate,
                 'temperature': latest_vital.temperature,
                 'oxygen_saturation': latest_vital.oxygen_saturation,
                 'blood_pressure': latest_vital.blood_pressure, # ADDED: Ensure BP is included
@@ -966,9 +966,9 @@ def get_patient_vitals_by_id(request, patient_id): # <-- NEW FUNCTION
                 bmi_value = round(vital.weight / (height_m * height_m), 1)
 
             history_data.append({
-                'id': vital.id,
+                'vitals_id': vital.vitals_id,
                 'date': vital.date_time_recorded.strftime('%Y-%m-%d %H:%M'), 
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'blood_pressure': vital.blood_pressure,
                 'temperature': vital.temperature,
                 'oxygen_saturation': vital.oxygen_saturation,
@@ -1107,7 +1107,8 @@ def get_all_patients(request):
         patients_queryset = patients_queryset.filter(
             Q(first_name__icontains=search_term) | 
             Q(last_name__icontains=search_term) | 
-            Q(address__icontains=search_term) | 
+            Q(street__icontains=search_term) | 
+            Q(barangay__icontains=search_term) | 
             Q(patient_id__icontains=search_term)
         )
     
@@ -1118,11 +1119,11 @@ def get_all_patients(request):
     latest_vitals_map = VitalSigns.objects.filter(
         patient__in=patients_queryset
     ).values('patient').annotate(
-        latest_id=Max('id')
+        latest_id=Max('vitals_id')
     ).values_list('latest_id', flat=True)
 
     # Fetch the actual latest VitalSigns objects using their IDs
-    latest_vitals = VitalSigns.objects.filter(id__in=latest_vitals_map)
+    latest_vitals = VitalSigns.objects.filter(vitals_id__in=latest_vitals_map)
     
     # Map them by patient.patient_id (the string ID) for easy lookup
     vitals_dict = {v.patient.patient_id: v for v in latest_vitals}
@@ -1147,7 +1148,7 @@ def get_all_patients(request):
                 bmi_value = round(vital.weight / (height_m * height_m), 1)
 
             latest_vital_data = {
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'temperature': vital.temperature,
                 'oxygen_saturation': vital.oxygen_saturation,
                 'blood_pressure': vital.blood_pressure,
@@ -1202,9 +1203,9 @@ def get_archived_patients(request):
     return Response(data)
 
 @api_view(['POST'])
-def store_fingerprint(request):
+def store_biometric(request):
     """
-    Store fingerprint template sent from Raspberry Pi.
+    Store biometric template sent from Raspberry Pi.
     Example JSON: {"patient_id": "P-20251107-001", "template": "<base64_string>"}
     """
     patient_id = request.data.get("patient_id")
@@ -1217,16 +1218,16 @@ def store_fingerprint(request):
         patient = Patient.objects.get(patient_id=patient_id)
         # Decode the base64 template
         template_bytes = base64.b64decode(template_b64)
-        patient.fingerprint_template = template_bytes
+        patient.biometric_template = template_bytes
         patient.save()
-        return Response({"message": "Fingerprint template stored successfully!"})
+        return Response({"message": "biometric template stored successfully!"})
     except Patient.DoesNotExist:
         return Response({"error": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['POST'])
-def verify_fingerprint(request):
+def verify_biometric(request):
     """
-    Called by Raspberry Pi when a fingerprint is matched.
+    Called by Raspberry Pi when a biometric is matched.
     Example data: {"user_id": "8", "score": "70"}
     """
     user_id = request.data.get("user_id")
@@ -1236,30 +1237,30 @@ def verify_fingerprint(request):
         return Response({"error": "Missing user_id or score"}, status=400)
 
     try:
-        # Match the fingerprint ID with a patient
-        patient = Patient.objects.get(fingerprint_id=user_id)
+        # Match the biometric ID with a patient
+        patient = Patient.objects.get(biometric_id=user_id)
         patient.last_visit = timezone.now()
         patient.save()
         return Response({
-            "message": f"Fingerprint match successful for {patient.first_name} {patient.last_name}",
+            "message": f"biometric match successful for {patient.first_name} {patient.last_name}",
             "patient_id": patient.patient_id,
             "score": score
         }, status=200)
     except Patient.DoesNotExist:
-        return Response({"error": f"No patient found with fingerprint_id {user_id}"}, status=404)
+        return Response({"error": f"No patient found with biometric_id {user_id}"}, status=404)
 
 # Add this to your views.py
 @api_view(['POST'])
-def fingerprint_match_notification(request):
+def biometric_match_notification(request):
     """
-    Called by the fingerprint scanner management command
+    Called by the biometric scanner management command
     when a match is found (optional - for real-time notifications)
     """
-    fingerprint_id = request.data.get('fingerprint_id')
+    biometric_id = request.data.get('biometric_id')
     confidence = request.data.get('confidence')
     
     try:
-        patient = Patient.objects.get(fingerprint_id=fingerprint_id)
+        patient = Patient.objects.get(biometric_id=biometric_id)
         
         # You could trigger websocket notifications here
         # or update a cache for frontend polling
@@ -1272,7 +1273,7 @@ def fingerprint_match_notification(request):
     except Patient.DoesNotExist:
         return Response({
             'status': 'unknown',
-            'message': 'Fingerprint not registered'
+            'message': 'biometric not registered'
         }, status=404)
         
 """
@@ -1350,7 +1351,7 @@ def print_patient_vitals(request, patient_id=None):
                 "weight": f"{latest_vital.weight} kg" if latest_vital.weight else "—",
                 "height": f"{latest_vital.height} cm" if latest_vital.height else "—",
                 "bmi": f"{bmi_value} kg/m²" if bmi_value else "—",
-                "heart_rate": f"{latest_vital.heart_rate} bpm" if latest_vital.heart_rate else "—",
+                "pulse_rate": f"{latest_vital.pulse_rate} bpm" if latest_vital.pulse_rate else "—",
                 "temperature": f"{latest_vital.temperature} °C" if latest_vital.temperature else "—",
                 "oxygen_saturation": f"{latest_vital.oxygen_saturation} %" if latest_vital.oxygen_saturation else "—",
                 "blood_pressure": f"{latest_vital.blood_pressure} mmHg" if latest_vital.blood_pressure else "—"
@@ -1420,10 +1421,10 @@ def get_priority_reasons(vital_signs):
         elif vital_signs.temperature <= 35:
             reasons.append("Hypothermia")
     
-    if vital_signs.heart_rate:
-        if vital_signs.heart_rate > 100:
+    if vital_signs.pulse_rate:
+        if vital_signs.pulse_rate > 100:
             reasons.append("Elevated heart rate")
-        elif vital_signs.heart_rate < 60:
+        elif vital_signs.pulse_rate < 60:
             reasons.append("Low heart rate")
     
     if vital_signs.oxygen_saturation:
@@ -1511,7 +1512,7 @@ def generate_vitals_pdf(print_data):
     y = draw_lr("Weight", measurements["weight"], y)
     y = draw_lr("Height", measurements["height"], y)
     y = draw_lr("BMI", measurements["bmi"], y)
-    y = draw_lr("Pulse Rate", measurements["heart_rate"], y)
+    y = draw_lr("Pulse Rate", measurements["pulse_rate"], y)
     y = draw_lr("SpO2", measurements["oxygen_saturation"], y)
     y = draw_lr("Temperature", measurements["temperature"], y)
     y = draw_lr("Blood Pressure", measurements["blood_pressure"], y)

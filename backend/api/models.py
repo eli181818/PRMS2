@@ -5,7 +5,8 @@ from .utils import compute_patient_priority
 from django.contrib.auth.hashers import make_password, check_password
 
 class HCStaff(models.Model):
-    name = models.CharField(max_length=50)
+    staff_id = models.AutoField(primary_key=True)
+    username = models.CharField(max_length=20, default='staff')
     staff_pin = models.CharField(max_length=255, unique=True)
     
     def set_pin(self, raw_pin):
@@ -17,39 +18,40 @@ class HCStaff(models.Model):
         return check_password(raw_pin, self.staff_pin)
 
     def save(self, *args, **kwargs):
-        # Hash the PIN if it’s not already hashed
         if self.staff_pin and not self.staff_pin.startswith('pbkdf2_'):
             self.staff_pin = make_password(self.staff_pin)
         super().save(*args, **kwargs)
 
+
 class Patient(models.Model):    
-    patient_id = models.CharField(max_length=15, unique=True, primary_key=True)
+    patient_id = models.CharField(max_length=14, primary_key=True)
     first_name = models.CharField(max_length=50)
     middle_name = models.CharField(max_length=50, null=True, blank=True)
     last_name = models.CharField(max_length=50)
     sex = models.CharField(max_length=6, choices=[('Male', 'Male'), ('Female', 'Female')])
     contact = models.CharField(max_length=11, default='N/A')
-    street = models.CharField(max_length=50, null=True, blank=True)
-    barangay = models.CharField(max_length=3, null=True, blank=True)
-    username = models.CharField(max_length=20, null=True, blank=True, unique=True)
+    street = models.CharField(max_length=100)
+    barangay = models.CharField(max_length=3, default='000')
+    username = models.CharField(max_length=20, unique=True)
     birthdate = models.DateField(null=True, blank=True)
-    pin = models.CharField(max_length=255)
-    fingerprint_id = models.CharField(max_length=4, null=True, blank=True, unique=True)
+    patient_pin = models.CharField(max_length=255) 
+    biometric_id = models.CharField(max_length=5, unique=True, null=True, blank=True)
+    date_created = models.DateTimeField(default=timezone.now)
     last_visit = models.DateTimeField(null=True, blank=True)
 
     def set_pin(self, raw_pin):
-        self.pin = make_password(raw_pin)
+        """Hashes and sets the patient PIN."""
+        self.patient_pin = make_password(raw_pin)  # Fixed: use patient_pin
 
     def check_pin(self, raw_pin):
-        return check_password(raw_pin, self.pin)
+        """Verifies a raw PIN against the stored hash."""
+        return check_password(raw_pin, self.patient_pin)  # Fixed: use patient_pin
     
     @property
     def age(self):
         """Calculates age based on birthdate and today's date."""
         if self.birthdate:
             today = date.today()
-            # Calculate the age: today.year - birthdate.year
-            # Subtract 1 if the current date is before the birthday this year
             return today.year - self.birthdate.year - ((today.month, today.day) < (self.birthdate.month, self.birthdate.day))
         return None
 
@@ -59,17 +61,17 @@ class Patient(models.Model):
             yyyymmdd = today.strftime("%Y%m%d")
 
             # Keep trying until unique ID found
-            for i in range(1, 1000):  # allows up to 999 per day
+            for i in range(1, 1000):
                 candidate_id = f"P-{yyyymmdd}-{i:03d}"
                 if not Patient.objects.filter(patient_id=candidate_id).exists():
                     self.patient_id = candidate_id
                     break
             
         # Hash the PIN if it's not already hashed
-        if self.pin and not self.pin.startswith('pbkdf2_'):
-            self.pin = make_password(self.pin)
+        if self.patient_pin and not self.patient_pin.startswith('pbkdf2_'): 
+            self.patient_pin = make_password(self.patient_pin)  
             
-          # set last_visit on first creation
+        # Set last_visit on first creation
         if not self.last_visit:
             self.last_visit = timezone.now()
 
@@ -79,53 +81,45 @@ class Patient(models.Model):
         """Helper: Check if patient is senior (age >= 65)."""
         return self.age is not None and self.age >= 65
 
-class VitalSigns(models.Model):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='vital_signs')
-    device_id = models.CharField(max_length=50, null=True, blank=True)
-    date_time_recorded = models.DateTimeField(auto_now_add=True)
-    heart_rate = models.IntegerField(null=True, blank=True)  # bpm
-    temperature = models.FloatField(null=True, blank=True)  # °C
-    oxygen_saturation = models.FloatField(null=True, blank=True)  # %
-    blood_pressure = models.CharField(null=True, blank=True, max_length=7)  # mmHg
-    height = models.FloatField(null=True, blank=True)  # cm (centimeters)
-    weight = models.FloatField(null=True, blank=True)  # kg
-    bmi = models.FloatField(null=True, blank=True)
-    
-    def save(self, *args, **kwargs):
-        """Auto-compute BMI if height and weight are provided"""
-        # Compute BMI if height (in cm) and weight (in kg) are provided
-        if self.height and self.weight and self.height > 0:
-            # Convert height from cm to meters
-            height_m = self.height / 100
-            # Calculate BMI: weight (kg) / (height in meters)²
-            self.bmi = round(self.weight / (height_m ** 2), 1)
-        
-        super().save(*args, **kwargs)
 
-from django.db import models
-from django.utils import timezone
+class VitalSigns(models.Model):
+    vitals_id = models.AutoField(primary_key=True)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='vital_signs', db_column='patient_id')
+    pulse_rate = models.IntegerField(null=True, blank=True)  
+    temperature = models.FloatField(null=True, blank=True)  
+    oxygen_saturation = models.FloatField(null=True, blank=True)  
+    blood_pressure = models.CharField(null=True, blank=True, max_length=7)  
+    height = models.FloatField(null=True, blank=True) 
+    weight = models.FloatField(null=True, blank=True) 
+    date_time_recorded = models.DateTimeField(auto_now_add=True)
+    
+    @property
+    def bmi(self):
+        """Calculate BMI from height and weight"""
+        if self.height and self.weight and self.height > 0:
+            height_m = self.height / 100
+            return round(self.weight / (height_m ** 2), 1)
+        return None
+
 
 class QueueEntry(models.Model):
     STATUS_CHOICES = [
         ('WAITING', 'Waiting'),
-        ('SERVING', 'Currently Being Served'),
         ('COMPLETED', 'Completed'),
-        ('CANCELLED', 'Cancelled'),
     ]
     
     PRIORITY_CHOICES = [
         ('CRITICAL', 'Critical'),
         ('HIGH', 'High'),
-        ('MEDIUM', 'Medium'),
         ('NORMAL', 'Normal'),
     ]
-    
-    patient = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='queue_entries')
-    priority_status = models.CharField(max_length=10, choices=PRIORITY_CHOICES, null=True, blank=True)
+    queue_id = models.AutoField(primary_key=True)
+    patient = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='queue_entries', db_column='patient_id')
+    priority_status = models.CharField(max_length=8, choices=PRIORITY_CHOICES, null=True, blank=True)
     entered_at = models.DateTimeField(default=timezone.now)
-    queue_number = models.CharField(max_length=10, null=True, blank=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='WAITING')
-    served_at = models.DateTimeField(null=True, blank=True)  # Track when completed
+    queue_number = models.CharField(max_length=3, null=True, blank=True)  
+    status = models.CharField(max_length=9, choices=STATUS_CHOICES, default='WAITING')
+    served_at = models.DateTimeField(null=True, blank=True) 
     
     class Meta:
         ordering = ['-entered_at']
@@ -145,11 +139,10 @@ class QueueEntry(models.Model):
             today = timezone.now().date()
             
             # Determine if this is a priority patient
-            is_priority = self.priority_status in ['CRITICAL', 'HIGH', 'MEDIUM']
+            is_priority = self.priority_status in ['CRITICAL', 'HIGH']  # Fixed: removed MEDIUM
             
             if is_priority:
                 # Priority patients: 300-999
-                # Find the highest priority queue number today (including completed ones)
                 highest_priority = QueueEntry.objects.filter(
                     entered_at__date=today,
                     queue_number__gte='300',
@@ -159,7 +152,6 @@ class QueueEntry(models.Model):
                 if highest_priority and highest_priority.queue_number:
                     try:
                         next_num = int(highest_priority.queue_number) + 1
-                        # If we've exceeded 999, wrap to 300
                         if next_num > 999:
                             next_num = 300
                     except ValueError:
@@ -170,7 +162,6 @@ class QueueEntry(models.Model):
                 self.queue_number = str(next_num)
             else:
                 # Normal patients: 001-299
-                # Find the highest normal queue number today (including completed ones)
                 highest_normal = QueueEntry.objects.filter(
                     entered_at__date=today,
                     queue_number__gte='001',
@@ -180,7 +171,6 @@ class QueueEntry(models.Model):
                 if highest_normal and highest_normal.queue_number:
                     try:
                         next_num = int(highest_normal.queue_number) + 1
-                        # If we've exceeded 299, wrap to 001
                         if next_num > 299:
                             next_num = 1
                     except ValueError:
@@ -203,8 +193,7 @@ class QueueEntry(models.Model):
         self.status = 'SERVING'
         self.save()
 
-        
-              
+
 class ArchivedPatient(models.Model):
     patient_id = models.CharField(max_length=15, primary_key=True)
     first_name = models.CharField(max_length=50)
@@ -212,46 +201,52 @@ class ArchivedPatient(models.Model):
     last_name = models.CharField(max_length=50)
     sex = models.CharField(max_length=6)
     contact = models.CharField(max_length=11)
-    street = models.CharField(max_length=50, null=True, blank=True)
+    street = models.CharField(max_length=100, null=True, blank=True)  
     barangay = models.CharField(max_length=3, null=True, blank=True)
     username = models.CharField(max_length=20, null=True, blank=True)
     birthdate = models.DateField(null=True, blank=True)
-    pin = models.CharField(max_length=255)
-    fingerprint_id = models.CharField(max_length=4, null=True, blank=True)
+    patient_pin = models.CharField(max_length=255)  
+    biometric_id = models.CharField(max_length=5, null=True, blank=True)
     last_visit = models.DateTimeField(null=True, blank=True)
     
     # Archive metadata
     archived_at = models.DateTimeField(auto_now_add=True)
+    archived_by = models.ForeignKey(HCStaff, on_delete=models.SET_NULL, null=True, blank=True)  # ADD THIS
+    archive_reason = models.TextField(null=True, blank=True)  # ADD THIS
     original_created_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         db_table = 'archived_patient'
         verbose_name = 'Archived Patient'
 
+
 class ArchivedVitalSigns(models.Model):
-    # Link to archived patient
-    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='vital_signs')
-    
-    # Copy all VitalSigns fields
-    device_id = models.CharField(max_length=50, null=True, blank=True)
-    date_time_recorded = models.DateTimeField()
-    heart_rate = models.IntegerField(null=True, blank=True)
+    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='vital_signs', db_column='patient_id')
+    pulse_rate = models.IntegerField(null=True, blank=True)  # Fixed: match VitalSigns
     temperature = models.FloatField(null=True, blank=True)
     oxygen_saturation = models.FloatField(null=True, blank=True)
-    blood_pressure = models.IntegerField(null=True, blank=True)
+    blood_pressure = models.CharField(max_length=7, null=True, blank=True)  # Fixed: match VitalSigns
     height = models.FloatField(null=True, blank=True)
     weight = models.FloatField(null=True, blank=True)
-    bmi = models.FloatField(null=True, blank=True)
+    date_time_recorded = models.DateTimeField()
     
     # Archive metadata
     archived_at = models.DateTimeField(auto_now_add=True)
     
+    @property
+    def bmi(self):
+        """Calculate BMI from height and weight"""
+        if self.height and self.weight and self.height > 0:
+            height_m = self.height / 100
+            return round(self.weight / (height_m ** 2), 1)
+        return None
+    
     class Meta:
         db_table = 'archived_vital_signs'
 
+
 class ArchivedQueueEntry(models.Model):
-    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='queue_entries')
-    
+    patient = models.ForeignKey(ArchivedPatient, on_delete=models.CASCADE, related_name='queue_entries', db_column='patient_id')
     priority_status = models.CharField(max_length=10)
     entered_at = models.DateTimeField()
     queue_number = models.CharField(max_length=10)
@@ -262,14 +257,17 @@ class ArchivedQueueEntry(models.Model):
     class Meta:
         db_table = 'archived_queue_entry'
 
-# In models.py or utils.py
-from django.db import transaction
 
 @transaction.atomic
 def archive_patient(patient_id, staff=None, reason=None):
     """
     Archive a patient and all their related records.
     This moves data from active tables to archive tables.
+    
+    Args:
+        patient_id: The ID of the patient to archive
+        staff: HCStaff instance (optional)
+        reason: Text reason for archiving (optional)
     """
     try:
         # Check if patient is already archived
@@ -291,12 +289,12 @@ def archive_patient(patient_id, staff=None, reason=None):
             barangay=patient.barangay,
             username=patient.username,
             birthdate=patient.birthdate,
-            pin=patient.pin,
-            fingerprint_id=patient.fingerprint_id,
+            patient_pin=patient.patient_pin,
+            biometric_id=patient.biometric_id,
             last_visit=patient.last_visit,
-            archived_by=staff,
-            archive_reason=reason,
-            original_created_at=timezone.now(),
+            original_created_at=patient.date_created,
+            archived_by=staff,  # Pass the staff instance
+            archive_reason=reason  # Pass the reason text
         )
         
         # Archive all vital signs
@@ -304,15 +302,13 @@ def archive_patient(patient_id, staff=None, reason=None):
         for vital in vitals:
             ArchivedVitalSigns.objects.create(
                 patient=archived_patient,
-                device_id=vital.device_id,
-                date_time_recorded=vital.date_time_recorded,
-                heart_rate=vital.heart_rate,
+                pulse_rate=vital.pulse_rate,
                 temperature=vital.temperature,
                 oxygen_saturation=vital.oxygen_saturation,
                 blood_pressure=vital.blood_pressure,
                 height=vital.height,
                 weight=vital.weight,
-                bmi=vital.bmi,
+                date_time_recorded=vital.date_time_recorded,
             )
         
         # Archive queue entries
@@ -335,7 +331,6 @@ def archive_patient(patient_id, staff=None, reason=None):
     except Exception as e:
         return False, f"Error archiving patient: {str(e)}"
 
-
 @transaction.atomic
 def restore_patient(patient_id):
     """
@@ -357,13 +352,14 @@ def restore_patient(patient_id):
             last_name=archived_patient.last_name,
             sex=archived_patient.sex,
             contact=archived_patient.contact,
-            street=patient.street,
-            barangay=patient.barangay,
+            street=archived_patient.street,  # Fixed
+            barangay=archived_patient.barangay,  # Fixed
             username=archived_patient.username,
             birthdate=archived_patient.birthdate,
-            pin=archived_patient.pin,
-            fingerprint_id=archived_patient.fingerprint_id,
+            patient_pin=archived_patient.patient_pin,  # Fixed
+            biometric_id=archived_patient.biometric_id,  # Fixed
             last_visit=archived_patient.last_visit,
+            date_created=archived_patient.original_created_at,  # Fixed
         )
         
         # Restore vital signs
@@ -371,15 +367,12 @@ def restore_patient(patient_id):
         for vital in archived_vitals:
             VitalSigns.objects.create(
                 patient=patient,
-                device_id=vital.device_id,
-                date_time_recorded=vital.date_time_recorded,
-                heart_rate=vital.heart_rate,
+                pulse_rate=vital.pulse_rate,  # Fixed
                 temperature=vital.temperature,
                 oxygen_saturation=vital.oxygen_saturation,
                 blood_pressure=vital.blood_pressure,
                 height=vital.height,
                 weight=vital.weight,
-                bmi=vital.bmi,
             )
         
         # Delete from archive

@@ -4,10 +4,10 @@ from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login,
                     get_vitals, receive_vital_signs, update_vitals, get_all_patients, 
                     test_rpi_connection, logout, get_patient_profile, get_patient_vitals,
                     get_patient_vitals_by_id, archive_patient_view, restore_patient_view,
-                    get_archived_patients, store_fingerprint, verify_fingerprint, 
-                    start_fingerprint_enrollment,
-                    check_enrollment_status, delete_fingerprint, get_fingerprint_count,
-                    start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan
+                    get_archived_patients, store_biometric, verify_biometric, 
+                    start_biometric_enrollment,
+                    check_enrollment_status, delete_biometric, get_biometric_count,
+                    start_biometric_scan, check_biometric_match, stop_biometric_scan
                 )
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -32,8 +32,8 @@ urlpatterns = [ # endpoints
     path('archive-patient/<str:patient_id>/', archive_patient_view, name='archive_patient'),
     path('restore-patient/<str:patient_id>/', restore_patient_view, name='restore_patient'),
     path('archived-patients/', get_archived_patients, name='archived_patients'),
-    path('store-fingerprint/', store_fingerprint, name='store_fingerprint'),
-    path('verify-fingerprint/', verify_fingerprint, name='verify_fingerprint'),
+    path('store-biometric/', store_biometric, name='store_biometric'),
+    path('verify-biometric/', verify_biometric, name='verify_biometric'),
     path('', include(router.urls)),
     path('login/', login, name='login'),
     path('receive-vitals/', receive_vital_signs, name='receive_vitals'),
@@ -41,16 +41,16 @@ urlpatterns = [ # endpoints
     path('test-connection/', test_rpi_connection, name='test_connection'),
     path('start_vitals/', views.start_vitals, name='start_vitals'),
     path('fetch_temperature/', views.fetch_temperature, name='fetch_temperature'),
-    path('fetch_heart_rate/', views.fetch_heart_rate, name='fetch_heart_rate'),
+    path('fetch_pulse_rate/', views.fetch_pulse_rate, name='fetch_pulse_rate'),
     path('fetch_spo2/', views.fetch_spo2, name='fetch_spo2'),
     path('fetch_height/', views.fetch_height, name='fetch_height'),
-    path('fingerprint/enroll/', start_fingerprint_enrollment, name='start_fingerprint_enrollment'),
-    path('fingerprint/status/', check_enrollment_status, name='check_enrollment_status'),
-    path('fingerprint/delete/<str:patient_id>/', delete_fingerprint, name='delete_fingerprint'),
-    path('fingerprint/count/', get_fingerprint_count, name='fingerprint_count'),
-    path('fingerprint/scan/', start_fingerprint_scan, name='start_fingerprint_scan'),
-    path('fingerprint/match/', check_fingerprint_match, name='check_fingerprint_match'),
-    path('fingerprint/stop/', stop_fingerprint_scan, name='stop_fingerprint_scan'),
+    path('biometric/enroll/', start_biometric_enrollment, name='start_biometric_enrollment'),
+    path('biometric/status/', check_enrollment_status, name='check_enrollment_status'),
+    path('biometric/delete/<str:patient_id>/', delete_biometric, name='delete_biometric'),
+    path('biometric/count/', get_biometric_count, name='biometric_count'),
+    path('biometric/scan/', start_biometric_scan, name='start_biometric_scan'),
+    path('biometric/match/', check_biometric_match, name='check_biometric_match'),
+    path('biometric/stop/', stop_biometric_scan, name='stop_biometric_scan'),
 ]
 
 

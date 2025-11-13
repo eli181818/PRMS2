@@ -113,7 +113,7 @@ export default function Reports() {
     sex: patient.sex || '—',
     age: calcAge(patient.birthdate) ?? '—',
     birthdate: formatDate(patient.birthdate),
-    address: patient.address || '—',
+    address: patient.street + patient.barangay || '—',
     contact: patient.contact || '—',
     lastVisit: formatDateTime(patient.last_visit),
   }))

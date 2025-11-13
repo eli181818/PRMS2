@@ -285,6 +285,55 @@ export default function PatientRecords() {
 
   const [totalCount, setTotalCount] = useState(0)
 
+  const handleArchiveClick = (patientId) => {
+    setPatientToArchive(patientId)
+    setShowArchiveModal(true)
+  }
+
+  const cancelArchive = () => {
+    setShowArchiveModal(false)
+    setPatientToArchive(null)
+  }
+
+  const confirmArchive = async () => {
+    if (!patientToArchive) return
+    
+    try {
+      const res = await fetch(`http://localhost:8000/archive-patient/${patientToArchive}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          reason: 'Archived from patient records'
+        })
+      })
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to archive patient')
+      }
+      
+      alert('Patient archived successfully')
+      
+      setShowArchiveModal(false)
+      setPatientToArchive(null)
+      
+      const currentSearch = searchParams.get('q') || ''
+      fetchPatients(currentSearch)
+      
+      if (currentPatient?.patient_id === patientToArchive) {
+        setCurrentPatient(null)
+        setEditing(false)
+        nav('/staff/patient-records', { replace: true })
+      }
+      
+    } catch (err) {
+      console.error('Failed to archive patient:', err)
+      alert(`Failed to archive patient: ${err.message}`)
+    }
+  }
+  
+
   return (
     <section className="relative mx-auto max-w-5xl px-2 py-16">
       <div className="absolute top-4 left-4">
@@ -332,7 +381,7 @@ export default function PatientRecords() {
                     <p className="text-sm" style={{ color: BRAND.text }}>
                       Patient ID: <span className="font-semibold">{p.patient_id || '—'}</span> • 
                       Contact: <span className="font-semibold">{p.contact || '—'}</span> • 
-                      Address: <span className="font-semibold">{p.address || '—'}</span>
+                      Address: <span className="font-semibold">{p.street || '—'}</span>
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -358,7 +407,7 @@ export default function PatientRecords() {
                   <div className="rounded-2xl border p-5" style={{ background: BRAND.bg, color: BRAND.text, borderColor: BRAND.border }}>
                     <div className="text-sm opacity-90">Pulse Rate</div>
                     <div className="mt-2 text-3xl font-extrabold tabular-nums">
-                      {p.latest_vitals?.heart_rate ?? '—'}
+                      {p.latest_vitals?.pulse_rate ?? '—'}
                     </div>
                     <div className="mt-1 text-xs opacity-80">BPM</div>
                   </div>
@@ -502,7 +551,7 @@ export default function PatientRecords() {
                   <div className="rounded-2xl border p-5" style={{ background: BRAND.bg, color: BRAND.text, borderColor: BRAND.border }}>
                     <div className="text-sm opacity-90">Pulse Rate</div>
                     <div className="mt-2 text-3xl font-extrabold tabular-nums">
-                      {latestVitals?.heart_rate ?? '—'}
+                      {latestVitals?.pulse_rate ?? '—'}
                     </div>
                     <div className="mt-1 text-xs opacity-80">BPM</div>
                   </div>
@@ -570,7 +619,7 @@ export default function PatientRecords() {
                           <td className="px-4 py-3">{r.date}</td>
                           <td className="px-4 py-3">{r.height ?? '—'}</td>
                           <td className="px-4 py-3">{r.weight ?? '—'}</td>
-                          <td className="px-4 py-3">{r.heart_rate ? `${r.heart_rate} bpm` : '—'}</td>
+                          <td className="px-4 py-3">{r.pulse_rate ? `${r.pulse_rate} bpm` : '—'}</td>
                           <td className="px-4 py-3">{r.oxygen_saturation ?? '—'}</td>
                           <td className="px-4 py-3">{r.temperature ?? '—'}</td>
                           <td className="px-4 py-3">{r.bmi ?? '—'}</td>

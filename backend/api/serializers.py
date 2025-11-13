@@ -22,7 +22,7 @@ class PatientSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Birthdate cannot be in the future.")
         return value
     
-    def validate_pin(self, value):
+    def validate_patient_pin(self, value):  # CHANGED: pin -> patient_pin
         # Don't validate if PIN is already hashed
         if value and value.startswith('pbkdf2_'):
             return value
@@ -33,22 +33,24 @@ class PatientSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         """Only re-hash the PIN when a new raw 4-digit PIN is provided."""
-        new_pin = validated_data.get('pin', None)
+        new_pin = validated_data.get('patient_pin', None)  # CHANGED: pin -> patient_pin
 
         if new_pin:
             # Only hash if it's a raw PIN (not already hashed)
             if not new_pin.startswith('pbkdf2_'):
                 # Enforce 4-digit rule for raw PINs
                 if not new_pin.isdigit() or len(new_pin) != 4:
-                    raise serializers.ValidationError({"pin": "PIN must be 4 digits"})
-                validated_data['pin'] = make_password(new_pin)
+                    raise serializers.ValidationError({"patient_pin": "PIN must be 4 digits"})
+                validated_data['patient_pin'] = make_password(new_pin)
         else:
             # If PIN not in update data, preserve existing PIN
-            validated_data.pop('pin', None)
+            validated_data.pop('patient_pin', None)
 
         return super().update(instance, validated_data)
     
 class VitalSignsSerializer(serializers.ModelSerializer): 
+    bmi = serializers.FloatField(read_only=True)  # ADDED: Include BMI property
+    
     class Meta:
         model = VitalSigns
         fields = '__all__'
@@ -60,13 +62,13 @@ class QueueEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = QueueEntry
         fields = [
-            'id', 
+            'queue_id',  # CHANGED: id -> queue_id (matches model primary key)
             'patient', 
             'priority_status', 
             'entered_at', 
             'queue_number', 
-            'status',  # Include status
-            'served_at',  # Include served_at
+            'status',
+            'served_at',
             'latest_vitals'
         ] 
     
@@ -92,18 +94,13 @@ class QueueEntrySerializer(serializers.ModelSerializer):
         if not latest_vital:
             return None
         
-        # Calculate BMI
-        bmi_value = None
-        if latest_vital.height and latest_vital.weight:
-            height_m = latest_vital.height / 100
-            bmi_value = round(latest_vital.weight / (height_m * height_m), 1)
-        
+        # Use the BMI property from the model
         return {
-            'heart_rate': latest_vital.heart_rate,
+            'pulse_rate': latest_vital.pulse_rate,  # CHANGED: heart_rate -> pulse_rate
             'temperature': latest_vital.temperature,
             'oxygen_saturation': latest_vital.oxygen_saturation,
             'blood_pressure': latest_vital.blood_pressure,
             'height': latest_vital.height,
             'weight': latest_vital.weight,
-            'bmi': bmi_value
+            'bmi': latest_vital.bmi  # Uses the @property from model
         }
