@@ -17,6 +17,9 @@ export default function VitalSigns() {
   const [showFinished, setShowFinished] = useState(false)
   const [priority, setPriority] = useState('NORMAL')
   const [priorityCode, setPriorityCode] = useState(null)
+  const [showError, setShowError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+
 
   const nav = useNavigate()
 
@@ -184,12 +187,13 @@ export default function VitalSigns() {
       const patientId = profile?.patientId || sessionStorage.getItem('patient_id')
       
       if (!patientId) {
-        alert('Patient ID not found. Please refresh and try again.')
+        setErrorMessage('Patient ID not found. Please refresh and try again.')
+        setShowError(true)
         setShowPrinting(false)
         return
       }
 
-      const res = await fetch(`${API_URL}/print-pos58/`, {
+      const res = await fetch(`${API_URL}/print-vitals-pos58/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -205,12 +209,15 @@ export default function VitalSigns() {
           setShowFinished(true)
         }, 800)
       } else {
-        alert('⚠️ Print failed: ' + data.error)
-        setShowPrinting(false)
+        setErrorMessage('⚠️ Print failed: ' + data.error)
+         setShowError(true)
+          setShowPrinting(false)
+
       }
     } catch (err) {
       console.error('POS58 print error:', err)
-      alert('Failed to send print command to printer.')
+      setErrorMessage('Failed to send print command to printer.')
+      setShowError(true)
       setShowPrinting(false)
     }
   }
@@ -260,7 +267,6 @@ export default function VitalSigns() {
                 </p>
               </div>
             </div>
-
             <Stat label="Weight" value={results.weight} unit="kg" />
             <Stat label="Height" value={results.height} unit="cm" />
             <Stat label="Blood Pressure" value={results.bp} unit="mmHg" />
@@ -304,7 +310,7 @@ export default function VitalSigns() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 text-center max-w-sm">
             <p className="text-lg font-semibold text-slate-800">
-              ✅ Results printed successfully!
+              Results printed successfully!
             </p>
             <p className="mt-2 text-sm text-slate-600">
               Please get your printed results and queuing number from the printer.
@@ -343,6 +349,25 @@ export default function VitalSigns() {
           </div>
         </div>
       )}
+
+      
+      {showError && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-2xl shadow-xl p-6 text-center max-w-xs">
+          <p className="text-lg font-semibold text-slate-700">
+            {errorMessage}
+          </p>
+
+          <button
+            onClick={() => setShowError(false)}
+            className="mt-4 rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-5 py-2"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )}
+
     </section>
   )
 }

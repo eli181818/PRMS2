@@ -780,6 +780,8 @@ def test_rpi_connection(request):
         "timestamp": timezone.now().isoformat()
     })
 
+
+#ADDED STAFF USERNAME
 @csrf_exempt
 @api_view(['POST'])
 def login(request):
@@ -787,24 +789,28 @@ def login(request):
     login_type = request.data.get("login_type")  # 'staff' or 'patient'
     username = request.data.get("username")  # For patient login
 
+    if not username:
+        return Response({"error": "Username required"}, status=status.HTTP_400_BAD_REQUEST)
+    
     if not pin:
         return Response({"error": "PIN required"}, status=status.HTTP_400_BAD_REQUEST)
 
     pin = str(pin).strip()
+    username = username.strip()
     
     if login_type == "staff":
         try:
-            # Get all staff and check hashed PINs one by one
-            staff_member = None
-            for s in HCStaff.objects.all():
-                if s.staff_pin and check_password(pin, s.staff_pin):
-                    staff_member = s
-                    break
+            # Find staff by username
+            try:
+                staff_member = HCStaff.objects.get(username=username)
+            except HCStaff.DoesNotExist:
+                return Response({"error": "Invalid username"}, status=status.HTTP_401_UNAUTHORIZED)
 
-            if not staff_member:
-                return Response({"error": "Invalid staff PIN"}, status=status.HTTP_401_UNAUTHORIZED)
+            # Verify hashed PIN
+            if not check_password(pin, staff_member.staff_pin):
+                return Response({"error": "Invalid PIN"}, status=status.HTTP_401_UNAUTHORIZED)
 
-            # CREATE SESSION (server-side)
+            # Create session
             request.session["user_id"] = staff_member.id
             request.session["user_type"] = "staff"
             request.session["name"] = staff_member.name
@@ -812,11 +818,12 @@ def login(request):
             return Response({
                 "role": "staff",
                 "name": staff_member.name,
-                "staff_id": staff_member.staff_id if hasattr(staff_member, 'staff_id') else staff_member.id
+                "staff_id": staff_member.staff_id
             })
 
         except Exception as e:
-            return Response({"error": f"Login failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+            return Response({"error": f"Login failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         
     elif login_type == 'patient':
         if not username:
@@ -1659,33 +1666,152 @@ def print_to_pos58(request):
         if not latest_vital:
             return Response({"error": "No vitals found"}, status=404)
 
+        # Calculate age safely
+        age_str = "—"
+        if patient.birthdate:
+            today = timezone.now().date()
+            age = today.year - patient.birthdate.year
+            if today.month < patient.birthdate.month or (
+                today.month == patient.birthdate.month and today.day < patient.birthdate.day
+            ):
+                age -= 1
+            age_str = str(age)
+
+        # Calculate BMI safely
+        bmi_str = "—"
+        if latest_vital.height and latest_vital.weight:
+            height_m = latest_vital.height / 100
+            bmi_value = round(latest_vital.weight / (height_m * height_m), 1)
+            bmi_str = str(bmi_value)
+
         receipt = f"""
-=============================
-  ESPERANZA HEALTH CENTER
-=============================
-Patient: {patient.first_name} {patient.last_name}
-ID: {patient.patient_id}
+    =============================
+    ESPERANZA HEALTH CENTER
+    =============================
+    Patient: {patient.first_name} {patient.last_name}
+    Age: {age_str}
+    ID: {patient.patient_id}
 
-TEMP: {latest_vital.temperature or '—'} °C
-PULSE: {latest_vital.heart_rate or '—'} bpm
-SPO2: {latest_vital.oxygen_saturation or '—'} %
-HEIGHT: {latest_vital.height or '—'} cm
-WEIGHT: {latest_vital.weight or '—'} kg
-BP: {latest_vital.blood_pressure or '—'}
+    TEMP: {latest_vital.temperature or '—'} °C
+    PULSE: {latest_vital.heart_rate or '—'} bpm
+    SPO2: {latest_vital.oxygen_saturation or '—'} %
+    HEIGHT: {latest_vital.height or '—'} cm
+    WEIGHT: {latest_vital.weight or '—'} kg
+    BMI: {bmi_str} kg/m²
+    BP: {latest_vital.blood_pressure or '—'}
+    Recorded at: {latest_vital.date_time_recorded.strftime("%Y-%m-%d %H:%M")}
 
-Thank you for visiting!
-=============================
+    Thank you for visiting!
+    =============================
 
-"""
+    """
 
         PRINTER_PATH = "/dev/usb/lp0"
-        with open(PRINTER_PATH, "w") as printer:
-            printer.write(receipt + "\n\n\n")
-
-        return Response({"message": "Printed successfully!"}, status=200)
+        try:
+            with open(PRINTER_PATH, "w") as printer:
+                printer.write(receipt + "\n\n\n")
+            return Response({"message": "Printed successfully!"}, status=200)
+        except IOError as e:
+            return Response({"error": f"Printer error: {str(e)}"}, status=500)
 
     except Patient.DoesNotExist:
         return Response({"error": "Patient not found"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+    
 
+'''API FOR PRINTING VITALS WITH QUEUE TO THERMAL PRINTER'''
+@api_view(['POST'])
+def print_vitals_pos58(request):
+    """
+    POS58 printer output for patient vitals with queue info.
+    """
+    patient_id = request.data.get("patient_id")
+    if not patient_id:
+        return Response({"error": "patient_id required"}, status=400)
+
+    try:
+        # Load the same data structure used by frontend
+        # Create a copy of request to avoid modifying original
+        from django.http import QueryDict
+        
+        # Call print_patient_vitals to get formatted data
+        response = print_patient_vitals(request, patient_id)
+        
+        # Check if the response was successful
+        if response.status_code != 200:
+            return Response({"error": "Failed to fetch patient vitals"}, status=response.status_code)
+        
+        data = response.data
+
+        header = data.get("header", {})
+        patient = data.get("patient_info", {})
+        meas = data.get("measurements", {})
+        triage = data.get("triage", {})
+        queue = data.get("queue", {})
+
+        # Build reasons list
+        reasons_block = ""
+        if triage.get("priority") != "NORMAL" and triage.get("reasons"):
+            reasons_block = "\nPriority Reasons:\n"
+            for r in triage["reasons"]:
+                reasons_block += f" - {r}\n"
+
+        # ===== 58MM RECEIPT FORMAT (VitalSigns.jsx layout) =====
+        txt = []
+        txt.append("      ESPERANZA HC")
+        txt.append("   Vital Signs Result")
+        txt.append(f"   {header.get('printed_at', '')}")
+        txt.append("--------------------------------")
+
+        # Queue + Priority
+        txt.append(f"QUEUE NO: {queue.get('number', '—')}")
+        if triage.get("priority") != "NORMAL":
+            priority_code = triage.get('priority_code', '')
+            txt.append(f"PRIORITY: {triage.get('priority', 'NORMAL')} {priority_code}")
+        else:
+            txt.append("PRIORITY: NORMAL")
+        txt.append("--------------------------------")
+
+        # Patient identity
+        txt.append(f"Patient ID: {patient.get('patient_id', '—')}")
+        txt.append(f"Name: {patient.get('name', '—')}")
+        txt.append(f"Age: {patient.get('age', '—')}")
+        txt.append("--------------------------------")
+
+        # Priority reasons
+        if reasons_block:
+            txt.append(reasons_block.strip())
+            txt.append("--------------------------------")
+
+        # Measurements
+        txt.append("Measurements:")
+        txt.append(f" Weight: {meas.get('weight', '—')}")
+        txt.append(f" Height: {meas.get('height', '—')}")
+        txt.append(f" BMI: {meas.get('bmi', '—')}")
+        txt.append(f" Heart Rate: {meas.get('heart_rate', '—')}")
+        txt.append(f" SpO2: {meas.get('oxygen_saturation', '—')}")
+        txt.append(f" Temp: {meas.get('temperature', '—')}")
+        txt.append(f" BP: {meas.get('blood_pressure', '—')}")
+        txt.append("--------------------------------")
+
+        txt.append("For check-up and consultation,")
+        txt.append("please proceed to the clinic area")
+        txt.append("once your number is called.")
+        txt.append("\n\n\n")
+
+        final_text = "\n".join(txt)
+
+        # Send to printer
+        PRINTER_PATH = "/dev/usb/lp0"
+        try:
+            with open(PRINTER_PATH, "w") as printer:
+                printer.write(final_text)
+            return Response({"message": "Vitals printed successfully!"})
+        except IOError as e:
+            return Response({"error": f"Printer error: {str(e)}"}, status=500)
+
+    except Patient.DoesNotExist:
+        return Response({"error": "Patient not found"}, status=404)
+    except Exception as e:
+        return Response({"error": f"Print error: {str(e)}"}, status=500)

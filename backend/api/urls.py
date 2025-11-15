@@ -8,7 +8,7 @@ from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login,
                     start_fingerprint_enrollment,
                     check_enrollment_status, delete_fingerprint, get_fingerprint_count,
                     start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan,
-                    print_patient_vitals, print_queue_ticket, print_to_pos58
+                    print_patient_vitals, print_queue_ticket, print_to_pos58, print_vitals_pos58
                 )
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -62,7 +62,7 @@ urlpatterns = [ # endpoints
     path('print-queue-ticket/', print_queue_ticket, name='print_queue_ticket'),
 
     path("print-pos58/", print_to_pos58, name='print_to_pos58'),
-
+    path('print-vitals-pos58/', views.print_vitals_pos58, name='print_vitals_pos58')
 ]
 
 
