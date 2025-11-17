@@ -40,23 +40,34 @@ export default function PatientRecords() {
   
   try {
     const first_name = (currentPatient.first_name || '').trim()
-    const middle_name = (currentPatient.middle_name || '').trim() // Remove .charAt(0)
+    const middle_name = (currentPatient.middle_name || '').trim()
     const last_name = (currentPatient.last_name || '').trim()
 
     const payload = {
       first_name: first_name || 'Unknown',
       last_name: last_name || 'Unknown', 
       sex: currentPatient.sex || 'Male',
-      address: currentPatient.address || '',
       contact: currentPatient.contact || '',
       pin: currentPatient.pin,
     }
     
     if (middle_name) {
-      payload.middle_name = middle_name || ''
+      payload.middle_name = middle_name
     }
+    
     if (currentPatient.birthdate) {
       payload.birthdate = currentPatient.birthdate
+    }
+
+    // Handle address - parse it if it's a string, or use street/barangay directly
+    if (currentPatient.address && typeof currentPatient.address === 'string') {
+      const addressParts = currentPatient.address.split(',').map(s => s.trim())
+      payload.street = addressParts[0] || ''
+      payload.barangay = addressParts[1] || ''
+    } else {
+      // If street and barangay exist separately
+      if (currentPatient.street) payload.street = currentPatient.street
+      if (currentPatient.barangay) payload.barangay = currentPatient.barangay
     }
 
     const res = await fetch(`http://localhost:8000/patients/${currentPatient.patient_id}/`, {
@@ -259,6 +270,54 @@ export default function PatientRecords() {
     }
   }
 
+  const handleArchiveClick = (patientId) => {
+    setPatientToArchive(patientId)
+    setShowArchiveModal(true)
+  }
+
+  const cancelArchive = () => {
+    setShowArchiveModal(false)
+    setPatientToArchive(null)
+  }
+
+  const confirmArchive = async () => {
+    if (!patientToArchive) return
+    
+    try {
+      const res = await fetch(`http://localhost:8000/archive-patient/${patientToArchive}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          reason: 'Archived via Patient Records page'
+        })
+      })
+      
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to archive patient')
+      }
+      
+      alert('Patient archived successfully')
+      setShowArchiveModal(false)
+      setPatientToArchive(null)
+      
+      // Refresh the patient list
+      const currentSearch = searchParams.get('q') || ''
+      fetchPatients(currentSearch)
+      
+      // Clear current patient if it was the one archived
+      if (currentPatient?.patient_id === patientToArchive) {
+        setCurrentPatient(null)
+        setEditing(false)
+        nav('/staff/patient-records', { replace: true })
+      }
+    } catch (err) {
+      console.error('Failed to archive:', err)
+      alert(`Failed to archive patient: ${err.message}`)
+    }
+  }
+
   const startEditing = (patient) => {
     const patientToEdit = {
       ...patient,
@@ -267,6 +326,8 @@ export default function PatientRecords() {
       last_name: patient.last_name || '',
       sex: patient.sex || 'Male',
       birthdate: patient.birthdate || patient.dob || '',
+      street: patient.street || '',
+      barangay: patient.barangay || '',
     }
     
     setCurrentPatient(patientToEdit)
@@ -283,7 +344,7 @@ export default function PatientRecords() {
       nav(`/staff/patient-records/${patient.patient_id}`, { replace: true })
     }
   }
-
+  
   const [totalCount, setTotalCount] = useState(0)
 
   return (

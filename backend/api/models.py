@@ -222,9 +222,11 @@ class ArchivedPatient(models.Model):
     fingerprint_id = models.CharField(max_length=4, null=True, blank=True)
     last_visit = models.DateTimeField(null=True, blank=True)
     
-    # Archive metadata
+    archived_by = models.CharField(max_length=100, null=True, blank=True)
+    archive_reason = models.TextField(null=True, blank=True)
     archived_at = models.DateTimeField(auto_now_add=True)
     original_created_at = models.DateTimeField(null=True, blank=True)
+    
     
     class Meta:
         db_table = 'archived_patient'
@@ -240,7 +242,7 @@ class ArchivedVitalSigns(models.Model):
     heart_rate = models.IntegerField(null=True, blank=True)
     temperature = models.FloatField(null=True, blank=True)
     oxygen_saturation = models.FloatField(null=True, blank=True)
-    blood_pressure = models.IntegerField(null=True, blank=True)
+    blood_pressure = models.CharField(null=True, blank=True, max_length=7)
     height = models.FloatField(null=True, blank=True)
     weight = models.FloatField(null=True, blank=True)
     bmi = models.FloatField(null=True, blank=True)
