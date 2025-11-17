@@ -1114,7 +1114,9 @@ def get_all_patients(request):
         patients_queryset = patients_queryset.filter(
             Q(first_name__icontains=search_term) | 
             Q(last_name__icontains=search_term) | 
-            Q(address__icontains=search_term) | 
+            Q(street__icontains=search_term) | 
+            Q(barangay__icontains=search_term) | 
+            
             Q(patient_id__icontains=search_term)
         )
     
