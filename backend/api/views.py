@@ -1720,85 +1720,79 @@ def print_to_pos58(request):
     except Exception as e:
         return Response({"error": str(e)}, status=500)
     
-
-'''API FOR PRINTING VITALS WITH QUEUE TO THERMAL PRINTER'''
-from rest_framework.request import Request as DRFRequest
-
+''' REPLACED FUNCTION FOR COMBINED RECEIPT '''
 @api_view(['POST'])
-def print_vitals_pos58(request):
+def print_vitals_and_queue_pos58(request):
     """
-    POS58 printer output for patient vitals with queue info.
+    Prints ONE combined receipt: queue ticket + vital signs.
     """
-
-    # ✅ FIX: Convert DRF Request to Django HttpRequest
-    if isinstance(request, DRFRequest):
-        request = request._request
-
-    patient_id = request.POST.get("patient_id") or request.GET.get("patient_id")
+    patient_id = request.data.get("patient_id")
     if not patient_id:
-        return Response({"error": "patient_id required"}, status=400)
-
+        return Response({"error": "patient_id is required"}, status=400)
+    
     try:
-        # Now this will NOT throw "request must be HttpRequest"
-        response = print_patient_vitals(request, patient_id)
+        patient = Patient.objects.get(patient_id=patient_id)
+        vitals = VitalSigns.objects.filter(patient=patient).order_by('-date_time_recorded').first()
 
-        if response.status_code != 200:
-            return Response({"error": "Failed to fetch patient vitals"}, status=response.status_code)
+        if not vitals:
+            return Response({"error": "No vitals found"}, status=404)
 
-        data = response.data
+        # Get today's queue entry
+        today = timezone.now().date()
+        queue = QueueEntry.objects.filter(
+            patient=patient,
+            entered_at__date=today
+        ).first()
 
-        header = data.get("header", {})
-        patient = data.get("patient_info", {})
-        meas = data.get("measurements", {})
-        triage = data.get("triage", {})
-        queue = data.get("queue", {})
+        queue_num = queue.queue_number if queue else None
+        priority = queue.priority_status if queue else "NORMAL"
 
-        reasons_block = ""
-        if triage.get("priority") != "NORMAL" and triage.get("reasons"):
-            reasons_block = "\nPriority Reasons:\n"
-            for r in triage["reasons"]:
-                reasons_block += f" - {r}\n"
+        # Compute BMI
+        bmi_str = "—"
+        if vitals.height and vitals.weight:
+            height_m = vitals.height / 100
+            bmi_value = round(vitals.weight / (height_m * height_m), 1)
+            bmi_str = str(bmi_value)
 
-        txt = []
-        txt.append("      ESPERANZA HC")
-        txt.append("   Vital Signs Result")
-        txt.append(f"   {header.get('printed_at', '')}")
-        txt.append("--------------------------------")
-        txt.append(f"QUEUE NO: {queue.get('number', '—')}")
-        if triage.get("priority") != "NORMAL":
-            txt.append(f"PRIORITY: {triage.get('priority','NORMAL')} {triage.get('priority_code','')}")
-        else:
-            txt.append("PRIORITY: NORMAL")
-        txt.append("--------------------------------")
-        txt.append(f"Patient ID: {patient.get('patient_id','—')}")
-        txt.append(f"Name: {patient.get('name','—')}")
-        txt.append(f"Age: {patient.get('age','—')}")
-        txt.append("--------------------------------")
+        # Prepare receipt text
+        # Prepare receipt text
+        receipt = f"""
+        =============================
+        ESPERANZA HEALTH CENTER
+        =============================
 
-        if reasons_block:
-            txt.append(reasons_block.strip())
-            txt.append("--------------------------------")
+        Patient: {patient.first_name} {patient.last_name}
+        ID: {patient.patient_id}
 
-        txt.append("Measurements:")
-        txt.append(f" Weight: {meas.get('weight','—')}")
-        txt.append(f" Height: {meas.get('height','—')}")
-        txt.append(f" BMI: {meas.get('bmi','—')}")
-        txt.append(f" HR: {meas.get('heart_rate','—')}")
-        txt.append(f" SpO2: {meas.get('oxygen_saturation','—')}")
-        txt.append(f" Temp: {meas.get('temperature','—')}")
-        txt.append(f" BP: {meas.get('blood_pressure','—')}")
-        txt.append("--------------------------------")
-        txt.append("\n\n\n")
+        Queue No: {str(queue_num).zfill(3) if queue_num else '—'}
+        Priority: {priority}
 
-        final_text = "\n".join(txt)
+        --- Vital Signs ---
+        Temp: {vitals.temperature or '—'} °C
+        Pulse: {vitals.heart_rate or '—'} bpm
+        SpO2: {vitals.oxygen_saturation or '—'} %
+        BP: {vitals.blood_pressure or '—'}
+        Height: {vitals.height or '—'} cm
+        Weight: {vitals.weight or '—'} kg
+        BMI: {bmi_str}
 
+        Recorded at:
+        {vitals.date_time_recorded.strftime("%Y-%m-%d %H:%M")}
+
+        Thank you for visiting!
+        For check-up and consultation,
+        please proceed to the clinic area
+        once your number is called.
+        =============================
+        """
+
+
+        # Send to thermal printer
         PRINTER_PATH = "/dev/usb/lp0"
-        try:
-            with open(PRINTER_PATH, "w") as printer:
-                printer.write(final_text)
-            return Response({"message": "Vitals printed successfully!"})
-        except IOError as e:
-            return Response({"error": f"Printer error: {str(e)}"}, status=500)
+        with open(PRINTER_PATH, "w") as printer:
+            printer.write(receipt + "\n\n\n")
+
+        return Response({"message": "Printed combined receipt!"}, status=200)
 
     except Exception as e:
-        return Response({"error": f"Print error: {str(e)}"}, status=500)
+        return Response({"error": str(e)}, status=500)

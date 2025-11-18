@@ -193,7 +193,7 @@ export default function VitalSigns() {
         return
       }
 
-      const res = await fetch(`${API_URL}/print-vitals-pos58/`, {
+      const res = await fetch("http://localhost:8000/print-vitals-and-queue/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -209,7 +209,7 @@ export default function VitalSigns() {
           setShowFinished(true)
         }, 800)
       } else {
-        setErrorMessage('⚠️ Print failed: ' + data.error)
+        setErrorMessage('Print failed: ' + data.error)
          setShowError(true)
           setShowPrinting(false)
 
