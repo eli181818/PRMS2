@@ -1755,35 +1755,43 @@ def print_vitals_and_queue_pos58(request):
             bmi_str = str(bmi_value)
 
        # Prepare receipt text
-        receipt = f"""
-    =============================
-    ESPERANZA HEALTH CENTER
-    =============================
+            queue_num_text = (
+                "\x1B\x21\x30"  
+                + f"{str(queue_num).zfill(3) if queue_num else '—'}"
+                + "\x1B\x21\x00"  
+            )
 
-    Patient: {patient.first_name} {patient.last_name}
-    ID: {patient.patient_id}
+            
+            queue_box = f"""
+                    ╔══════════════════════╗
+                    ║   {queue_num_text}   ║
+                    ╚══════════════════════╝
+            """
 
-    Queue No: {str(queue_num).zfill(3) if queue_num else '—'}
-    Priority: {priority}
-
-    --- Vital Signs ---
-    Temp: {vitals.temperature or '—'} °C
-    Pulse: {vitals.heart_rate or '—'} bpm
-    SpO2: {vitals.oxygen_saturation or '—'} %
-    BP: {vitals.blood_pressure or '—'}
-    Height: {vitals.height or '—'} cm
-    Weight: {vitals.weight or '—'} kg
-    BMI: {bmi_str}
-
-    Recorded at:
-    {vitals.date_time_recorded.strftime("%Y-%m-%d %H:%M")}
-
-
+            receipt = f"""
+            Esperanza Health Center
+              Vital Signs Result
+    {vitals.date_time_recorded.strftime("%m/%d/%Y %I:%M %p")}
+    --------------------------------
+                Queue No.
+    {queue_box}
+    Priority: [{priority} {get_priority_code(priority)}]
+    --------------------------------
+    Patient ID      {patient.patient_id}
+    Patient Name    {patient.first_name} {patient.last_name}
+    --------------------------------
+    Measurements
+    Weight          {vitals.weight or "—"} kg
+    Height          {vitals.height or "—"} cm
+    BMI             {bmi_str} kg/m²
+    Heart Rate      {vitals.heart_rate or "—"} bpm
+    SpO₂            {vitals.oxygen_saturation or "—"} %
+    Temp            {vitals.temperature or "—"} °C
+    BP              {vitals.blood_pressure or "—"} mmHg
+    --------------------------------
     Thank you for visiting!
     For check-up and consultation,
-    please proceed to the clinic area
-    once your number is called.
-    =============================
+    please proceed to the clinic area.
     """
 
         # Send to thermal printer
