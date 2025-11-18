@@ -1687,7 +1687,7 @@ def print_to_pos58(request):
 
         receipt = f"""
     =============================
-    ESPERANZA HEALTH CENTER
+       ESPERANZA HEALTH CENTER
     =============================
     Patient: {patient.first_name} {patient.last_name}
     Age: {age_str}
@@ -1758,7 +1758,7 @@ def print_vitals_and_queue_pos58(request):
         # Prepare receipt text
         receipt = f"""
         =============================
-        ESPERANZA HEALTH CENTER
+           ESPERANZA HEALTH CENTER
         =============================
 
         Patient: {patient.first_name} {patient.last_name}
