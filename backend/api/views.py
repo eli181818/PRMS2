@@ -24,18 +24,39 @@ import serial, json, time, threading
 
 SERIAL_PORT = 'COM8'  # Adjust if using ACM0
 BAUD_RATE = 115200
-active_serial = None
-active_serial_lock = threading.Lock()
+# active_serial = None
+# _serial_lock = threading.Lock()
 
 import serial
 
-def get_or_create_serial():
-    try:
-        ser = serial.Serial('COM8', 115200, timeout=1) #/dev/ttyACM0
-        return ser
-    except Exception as e:
-        print("Serial error:", e)
-        return None
+import atexit
+
+# Global persistent connection
+_serial_connection = None
+_serial_lock = threading.Lock()
+
+def get_serial():
+    """Get persistent serial connection - never close it"""
+    global _serial_connection
+    
+    with _serial_lock:
+        if _serial_connection is None or not _serial_connection.is_open:
+            try:
+                _serial_connection = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.5)
+                time.sleep(2)  # Initial Arduino boot only
+                print(f"Serial connected to {SERIAL_PORT}")
+            except Exception as e:
+                print(f"Serial error: {e}")
+                return None
+        return _serial_connection
+
+# Clean up on exit
+def cleanup_serial():
+    global _serial_connection
+    if _serial_connection and _serial_connection.is_open:
+        _serial_connection.close()
+        
+atexit.register(cleanup_serial)
 
 def get_next_fingerprint_id():
     """Get the next available fingerprint ID (1-127)"""
@@ -62,7 +83,7 @@ def start_fingerprint_scan(request):
     Start fingerprint scanning mode for login
     Arduino will continuously scan until a match is found
     """
-    ser = get_or_create_serial()
+    ser = get_serial()
     if ser is None:
         return Response(
             {"error": "Arduino connection error"}, 
@@ -70,7 +91,7 @@ def start_fingerprint_scan(request):
         )
     
     try:
-        with active_serial_lock:
+        with _serial_lock:
             # Clear buffer
             ser.reset_input_buffer()
             
@@ -92,47 +113,29 @@ def start_fingerprint_scan(request):
 
 @api_view(['GET'])
 def check_fingerprint_match(request):
-    """
-    Poll for fingerprint match results
-    Returns patient data if match found
-    """
-    ser = get_or_create_serial()
+    ser = get_serial()
     if ser is None:
-        return Response(
-            {"error": "Arduino connection error"}, 
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
+        return Response({"error": "Arduino connection error"}, status=503)
     
     try:
-        with active_serial_lock:
+        with _serial_lock:
+            # Non-blocking read
             if ser.in_waiting > 0:
-                line = ser.readline().decode('utf-8').strip()
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
                 
                 if line:
-                    print(f"[DEBUG] Raw Arduino response: {line}")  # ← ADD THIS
-                    
                     try:
                         data = json.loads(line)
-                        print(f"[DEBUG] Parsed JSON: {data}")  # ← ADD THIS
                         
-                        # If match found, get patient info
                         if data.get('status') == 'match':
                             fingerprint_id = str(data.get('id'))
-                            print(f"[DEBUG] Looking for fingerprint_id: '{fingerprint_id}' (type: {type(fingerprint_id)})")  # ← ADD THIS
-                            
-                            # DEBUG: Show all stored fingerprint IDs
-                            all_fps = Patient.objects.filter(fingerprint_id__isnull=False).values_list('patient_id', 'fingerprint_id')
-                            print(f"[DEBUG] All stored fingerprint IDs: {list(all_fps)}")  # ← ADD THIS
                             
                             try:
                                 patient = Patient.objects.get(fingerprint_id=fingerprint_id)
-                                print(f"[DEBUG] Patient found: {patient.first_name} {patient.last_name}")  # ← ADD THIS
                                 
-                                # Create session (auto-login)
+                                # Auto-login
                                 request.session['user_type'] = 'patient'
                                 request.session['patient_id'] = patient.patient_id
-                                
-                                # Update last visit
                                 patient.last_visit = timezone.now()
                                 patient.save()
                                 
@@ -140,47 +143,29 @@ def check_fingerprint_match(request):
                                     "status": "success",
                                     "patient_id": patient.patient_id,
                                     "name": f"{patient.first_name} {patient.last_name}",
-                                    "fingerprint_id": fingerprint_id,
                                     "confidence": data.get('confidence', 0)
                                 })
                                 
                             except Patient.DoesNotExist:
-                                print(f"[DEBUG] No patient found with fingerprint_id='{fingerprint_id}'")  # ← ADD THIS
                                 return Response({
                                     "status": "error",
-                                    "message": f"Fingerprint ID {fingerprint_id} not registered"
+                                    "message": f"Fingerprint not registered"
                                 })
                         
-                        # Return Arduino status (scanning, no_match, etc)
                         return Response(data)
                         
-                    except json.JSONDecodeError as e:
-                        print(f"[DEBUG] JSON decode error: {e}")  # ← ADD THIS
-                        return Response({
-                            "status": "scanning", 
-                            "message": line
-                        })
+                    except json.JSONDecodeError:
+                        return Response({"status": "scanning", "message": line})
             
-            # No data yet
-            return Response({
-                "status": "scanning", 
-                "message": "Waiting for finger"
-            })
+            return Response({"status": "scanning", "message": "Waiting..."})
                 
     except Exception as e:
-        print(f"[DEBUG] Exception: {e}")  # ← ADD THIS
-        return Response(
-            {"error": f"Error: {str(e)}"}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
+        return Response({"error": str(e)}, status=500)
 
 @api_view(['POST'])
 def stop_fingerprint_scan(request):
-    """
-    Stop fingerprint scanning mode
-    """
-    ser = get_or_create_serial()
+    """Stop fingerprint scanning mode"""
+    ser = get_serial()  # ✅ Changed
     if ser is None:
         return Response(
             {"error": "Arduino connection error"}, 
@@ -188,8 +173,7 @@ def stop_fingerprint_scan(request):
         )
     
     try:
-        with active_serial_lock:
-            # Send stop command
+        with _serial_lock:  # ✅ Changed
             ser.write(b"STOP\n")
             ser.flush()
         
@@ -204,19 +188,6 @@ def stop_fingerprint_scan(request):
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
-def get_or_create_serial():
-    """Get or create a persistent serial connection"""
-    global active_serial
-    
-    with active_serial_lock:
-        if active_serial is None or not active_serial.is_open:
-            try:
-                active_serial = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-                time.sleep(2)  # Let Arduino initialize
-            except serial.SerialException as e:
-                print(f"Failed to open serial: {e}")
-                return None
-        return active_serial
 
 @api_view(['POST'])
 def start_fingerprint_enrollment(request):
@@ -242,12 +213,11 @@ def start_fingerprint_enrollment(request):
         
         if not fingerprint_id:
             return Response(
-                {"error": "No available fingerprint slots (maximum 127 reached)"}, 
+                {"error": "No available fingerprint slots"}, 
                 status=status.HTTP_507_INSUFFICIENT_STORAGE
             )
         
-        # Get persistent serial connection
-        ser = get_or_create_serial()
+        ser = get_serial()  # ✅ Changed
         if ser is None:
             return Response(
                 {"error": "Arduino connection error"}, 
@@ -255,11 +225,8 @@ def start_fingerprint_enrollment(request):
             )
         
         try:
-            with active_serial_lock:
-                # Clear any old data
+            with _serial_lock:  # ✅ Changed
                 ser.reset_input_buffer()
-                
-                # Send enrollment command
                 command = f"E:{fingerprint_id}\n"
                 ser.write(command.encode())
                 ser.flush()
@@ -268,7 +235,7 @@ def start_fingerprint_enrollment(request):
                 "status": "started",
                 "fingerprint_id": fingerprint_id,
                 "patient_id": patient_id,
-                "message": "Enrollment started - place finger on sensor"
+                "message": "Enrollment started"
             })
                 
         except Exception as e:
@@ -296,7 +263,7 @@ def check_enrollment_status(request):
             status=status.HTTP_400_BAD_REQUEST
         )
    
-    ser = get_or_create_serial()
+    ser = get_serial()
     if ser is None:
         return Response(
             {"error": "Arduino connection error"},
@@ -304,7 +271,7 @@ def check_enrollment_status(request):
         )
    
     try:
-        with active_serial_lock:
+        with _serial_lock:
             # Check if there's data waiting
             if ser.in_waiting > 0:
                 line = ser.readline().decode('utf-8').strip()
@@ -446,23 +413,27 @@ from rest_framework.response import Response
 @api_view(['POST'])
 def start_vitals(request):
     """Trigger Arduino to measure temperature, heart rate, SpO2, height"""
+    ser = get_serial()  # ✅ Use shared connection
+    if ser is None:
+        return Response({"error": "Arduino connection error"}, status=500)
+    
     try:
-        print("🔌 Opening serial port...")
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
-            # Allow Arduino to reboot
-            time.sleep(3)
-
+        print("📡 Sending START command...")
+        
+        with _serial_lock:  # ✅ Lock the shared connection
+            # Clear buffers
             ser.reset_input_buffer()
             ser.reset_output_buffer()
 
-            print("➡️ Sending START command")
+            # Send command
             ser.write(b'START\n')
             ser.flush()
 
-            # Wait up to 5 seconds for a valid line
+            # Wait for response (up to 6 seconds)
             print("⏳ Waiting for Arduino data...")
             start_time = time.time()
             line = ""
+            
             while (time.time() - start_time) < 6:
                 if ser.in_waiting:
                     line = ser.readline().decode(errors='ignore').strip()
@@ -470,26 +441,27 @@ def start_vitals(request):
                         break
                 time.sleep(0.1)
 
-            print("Raw serial data:", repr(line))
+        print("Raw serial data:", repr(line))
 
-            if not line:
-                raise Exception("No data received from Arduino.")
+        if not line:
+            return Response({"error": "No data received from Arduino"}, status=500)
 
-            # Try to parse JSON safely
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                raise Exception(f"Invalid JSON from Arduino: {line}")
+        # Parse JSON
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return Response({"error": f"Invalid JSON: {line}"}, status=500)
 
-            latest_vitals.update({
-                "temperature": data.get("temperature"),
-                "heart_rate": data.get("heart_rate"),
-                "spo2": data.get("spo2"),
-                "height": data.get("height")
-            })
+        # Update global vitals cache
+        latest_vitals.update({
+            "temperature": data.get("temperature"),
+            "heart_rate": data.get("heart_rate"),
+            "spo2": data.get("spo2"),
+            "height": data.get("height")
+        })
 
-            print("✅ Vitals received:", latest_vitals)
-            return Response(latest_vitals)
+        print("✅ Vitals received:", latest_vitals)
+        return Response(latest_vitals)
 
     except Exception as e:
         print("🔥 Error reading vitals:", e)
@@ -498,20 +470,26 @@ def start_vitals(request):
 @api_view(['GET'])
 def fetch_temperature(request):
     """Fetch latest temperature from Arduino"""
+    ser = get_serial()
+    if ser is None:
+        return Response({"error": "Connection error"}, status=500)
+    
     try:
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
-            line = ser.readline().decode('utf-8').strip()
-            if not line:
-                return Response({"error": "No data"}, status=404)
-
-            data = json.loads(line)
-            temperature = data.get("temperature")
-            if temperature is not None:
-                latest_vitals["temperature"] = float(temperature)
-                print(f"🌡️ Temperature: {temperature}°C")
-                return Response({"temperature": temperature})
-            else:
-                return Response({"error": "No temperature key"}, status=400)
+        with _serial_lock:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        temperature = data.get("temperature")
+                        if temperature is not None:
+                            latest_vitals["temperature"] = float(temperature)
+                            print(f"🌡️ Temperature: {temperature}°C")
+                            return Response({"temperature": temperature})
+                    except json.JSONDecodeError:
+                        pass
+            
+            return Response({"error": "No data available"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -519,20 +497,26 @@ def fetch_temperature(request):
 @api_view(['GET'])
 def fetch_heart_rate(request):
     """Fetch latest heart rate from Arduino"""
+    ser = get_serial()
+    if ser is None:
+        return Response({"error": "Connection error"}, status=500)
+    
     try:
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
-            line = ser.readline().decode('utf-8').strip()
-            if not line:
-                return Response({"error": "No data"}, status=404)
-
-            data = json.loads(line)
-            heart_rate = data.get("heart_rate")
-            if heart_rate is not None:
-                latest_vitals["heart_rate"] = int(heart_rate)
-                print(f"❤️ Heart Rate: {heart_rate} bpm")
-                return Response({"heart_rate": heart_rate})
-            else:
-                return Response({"error": "No heart_rate key"}, status=400)
+        with _serial_lock:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        heart_rate = data.get("heart_rate")
+                        if heart_rate is not None:
+                            latest_vitals["heart_rate"] = int(heart_rate)
+                            print(f"❤️ Heart Rate: {heart_rate} bpm")
+                            return Response({"heart_rate": heart_rate})
+                    except json.JSONDecodeError:
+                        pass
+            
+            return Response({"error": "No data available"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
 
@@ -540,20 +524,26 @@ def fetch_heart_rate(request):
 @api_view(['GET'])
 def fetch_spo2(request):
     """Fetch latest oxygen saturation from Arduino"""
+    ser = get_serial()
+    if ser is None:
+        return Response({"error": "Connection error"}, status=500)
+    
     try:
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
-            line = ser.readline().decode('utf-8').strip()
-            if not line:
-                return Response({"error": "No data"}, status=404)
-
-            data = json.loads(line)
-            spo2 = data.get("spo2")
-            if spo2 is not None:
-                latest_vitals["spo2"] = int(spo2)
-                print(f"🫁 SpO2: {spo2}%")
-                return Response({"spo2": spo2})
-            else:
-                return Response({"error": "No spo2 key"}, status=400)
+        with _serial_lock:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        spo2 = data.get("spo2")
+                        if spo2 is not None:
+                            latest_vitals["spo2"] = int(spo2)
+                            print(f"🫁 SpO2: {spo2}%")
+                            return Response({"spo2": spo2})
+                    except json.JSONDecodeError:
+                        pass
+            
+            return Response({"error": "No data available"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
     
@@ -561,23 +551,28 @@ def fetch_spo2(request):
 @api_view(['GET'])
 def fetch_height(request):
     """Fetch latest height from Arduino"""
+    ser = get_serial()
+    if ser is None:
+        return Response({"error": "Connection error"}, status=500)
+    
     try:
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2) as ser:
-            line = ser.readline().decode('utf-8').strip()
-            if not line:
-                return Response({"error": "No data"}, status=404)
-
-            data = json.loads(line)
-            height = data.get("height")
-            if height is not None:
-                latest_vitals["height"] = int(height)
-                print(f"🫁 Height: {height}%")
-                return Response({"height": height})
-            else:
-                return Response({"error": "No height key"}, status=400)
+        with _serial_lock:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        height = data.get("height")
+                        if height is not None:
+                            latest_vitals["height"] = int(height)
+                            print(f"📏 Height: {height} cm")
+                            return Response({"height": height})
+                    except json.JSONDecodeError:
+                        pass
+            
+            return Response({"error": "No data available"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=500)
-
 
 
 # Create your views here.
