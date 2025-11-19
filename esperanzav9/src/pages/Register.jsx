@@ -47,6 +47,7 @@ export default function Register() {
   const [enrollmentTimer, setEnrollmentTimer] = useState(null)
   const [enrollmentFingerprintId, setEnrollmentFingerprintId] = useState(null)
   const [registeredPatientId, setRegisteredPatientId] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   const dob = useMemo(() => {
     const m = String(months.indexOf(month) + 1).padStart(2, '0')
@@ -73,8 +74,9 @@ export default function Register() {
     }
   }, [fpStatus, registeredPatientId, nav])
 
-  // Start fingerprint enrollment
-  const startAutomaticEnrollment = async (patientId) => {
+  // Start fingerprint enrollment with auto-retry
+  const startAutomaticEnrollment = async (patientId, currentRetry = 0) => {
+    setRetryCount(currentRetry)
     setFpStatus('enrolling')
     setFpMessage('Starting fingerprint enrollment...')
     setFpProgress(10)
@@ -128,10 +130,17 @@ export default function Register() {
           } else if (statusData.status === 'error') {
             clearInterval(timer)
             setEnrollmentTimer(null)
-            setFpStatus('error')
-            setFpMessage(statusData.message || 'Enrollment failed')
-            setPopupMsg('Enrollment failed: ' + (statusData.message || 'Please try again'))
-            setCreating(false)
+            
+            // Auto-retry enrollment on error
+            const errorMsg = statusData.message || 'Enrollment failed'
+            const nextRetry = currentRetry + 1
+            setFpMessage(`${errorMsg}. Retrying in 2 seconds... (Attempt ${nextRetry + 1})`)
+            setFpProgress(5)
+            
+            // Wait 2 seconds before retrying
+            setTimeout(() => {
+              startAutomaticEnrollment(patientId, nextRetry)
+            }, 2000)
           }
           
           // Update message if provided
@@ -146,11 +155,31 @@ export default function Register() {
       setEnrollmentTimer(timer)
      
     } catch (err) {
-      setPopupMsg(err.message || 'Failed to start fingerprint enrollment')
-      setFpStatus('error')
-      setFpMessage('Enrollment failed')
-      setCreating(false)
+      // Retry on network/server errors too
+      const errorMsg = err.message || 'Failed to start fingerprint enrollment'
+      const nextRetry = currentRetry + 1
+      setFpMessage(`${errorMsg}. Retrying in 2 seconds... (Attempt ${nextRetry + 1})`)
+      setFpProgress(5)
+      
+      setTimeout(() => {
+        startAutomaticEnrollment(patientId, nextRetry)
+      }, 2000)
     }
+  }
+
+  // Cancel enrollment and go back
+  const cancelEnrollment = () => {
+    if (enrollmentTimer) {
+      clearInterval(enrollmentTimer)
+      setEnrollmentTimer(null)
+    }
+    setFpStatus('cancelled')
+    setFpMessage('Enrollment cancelled')
+    setCreating(false)
+    setPopupMsg('Fingerprint enrollment cancelled. You can try again from your profile.')
+    setTimeout(() => {
+      nav('/vitals/weight', { state: { afterCaptureGoTo: '/records' } })
+    }, 2000)
   }
 
   const submit = async (e) => {
@@ -505,8 +534,21 @@ export default function Register() {
            
             <div className="mt-5">
               {fpStatus === 'enrolling' && (
-                <div className="rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-blue-800 text-sm">
-                  Follow the sensor prompts carefully
+                <div>
+                  <div className="rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-blue-800 text-sm mb-3">
+                    Follow the sensor prompts carefully
+                    {retryCount > 0 && (
+                      <div className="mt-2 text-xs text-blue-600">
+                        Retry attempt: {retryCount + 1}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={cancelEnrollment}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white text-sm py-2 rounded-lg transition-colors"
+                  >
+                    Cancel Enrollment
+                  </button>
                 </div>
               )}
              
@@ -517,9 +559,9 @@ export default function Register() {
                 </div>
               )}
 
-              {fpStatus === 'error' && (
-                <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-red-800 text-sm">
-                  {fpMessage}
+              {fpStatus === 'cancelled' && (
+                <div className="rounded-xl border border-orange-300 bg-orange-50 px-3 py-2 text-orange-800 text-sm">
+                  Enrollment cancelled
                 </div>
               )}
             </div>
