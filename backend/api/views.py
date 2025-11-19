@@ -22,8 +22,8 @@ from io import BytesIO
 import serial, json, time, threading
 
 
-SERIAL_PORT = '/dev/ttyACM0'  # Adjust if using ACM0
-BAUD_RATE = 9600
+SERIAL_PORT = 'COM8'  # Adjust if using ACM0
+BAUD_RATE = 115200
 active_serial = None
 active_serial_lock = threading.Lock()
 
@@ -31,7 +31,7 @@ import serial
 
 def get_or_create_serial():
     try:
-        ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+        ser = serial.Serial('COM8', 115200, timeout=1) #/dev/ttyACM0
         return ser
     except Exception as e:
         print("Serial error:", e)

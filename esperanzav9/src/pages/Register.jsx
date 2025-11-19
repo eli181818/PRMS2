@@ -1,4 +1,4 @@
-// Register.jsx - Aligned with Arduino fingerprint enrollment
+// Register.jsx - Continuous fingerprint enrollment with auto-retry
 import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -74,7 +74,7 @@ export default function Register() {
     }
   }, [fpStatus, registeredPatientId, nav])
 
-  // Start fingerprint enrollment with auto-retry
+  // Start fingerprint enrollment with silent auto-retry
   const startAutomaticEnrollment = async (patientId, currentRetry = 0) => {
     setRetryCount(currentRetry)
     setFpStatus('enrolling')
@@ -90,8 +90,15 @@ export default function Register() {
       })
      
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to start enrollment')
+        // Silent retry on network error
+        const nextRetry = currentRetry + 1
+        setFpMessage(`Retrying enrollment... (Attempt ${nextRetry + 1})`)
+        setFpProgress(5)
+        
+        setTimeout(() => {
+          startAutomaticEnrollment(patientId, nextRetry)
+        }, 1500)
+        return
       }
      
       const data = await response.json()
@@ -128,19 +135,18 @@ export default function Register() {
             setFpMessage('Fingerprint enrolled successfully!')
             setPopupMsg('Registration complete! Redirecting...')
           } else if (statusData.status === 'error') {
+            // Clear timer and silently retry
             clearInterval(timer)
             setEnrollmentTimer(null)
             
-            // Auto-retry enrollment on error
-            const errorMsg = statusData.message || 'Enrollment failed'
             const nextRetry = currentRetry + 1
-            setFpMessage(`${errorMsg}. Retrying in 2 seconds... (Attempt ${nextRetry + 1})`)
-            setFpProgress(5)
+            setFpMessage(`Retrying enrollment... (Attempt ${nextRetry + 1})`)
+            setFpProgress(10)
             
-            // Wait 2 seconds before retrying
+            // Wait 1.5 seconds before retrying
             setTimeout(() => {
               startAutomaticEnrollment(patientId, nextRetry)
-            }, 2000)
+            }, 1500)
           }
           
           // Update message if provided
@@ -149,21 +155,21 @@ export default function Register() {
           }
         } catch (err) {
           console.error('Error checking enrollment status:', err)
+          // Continue polling even on error
         }
       }, 1000)
      
       setEnrollmentTimer(timer)
      
     } catch (err) {
-      // Retry on network/server errors too
-      const errorMsg = err.message || 'Failed to start fingerprint enrollment'
+      // Retry on network/server errors silently
       const nextRetry = currentRetry + 1
-      setFpMessage(`${errorMsg}. Retrying in 2 seconds... (Attempt ${nextRetry + 1})`)
+      setFpMessage(`Retrying enrollment... (Attempt ${nextRetry + 1})`)
       setFpProgress(5)
       
       setTimeout(() => {
         startAutomaticEnrollment(patientId, nextRetry)
-      }, 2000)
+      }, 1500)
     }
   }
 
@@ -272,7 +278,6 @@ export default function Register() {
 
         <div className="grid gap-8 md:grid-cols-[2fr,1fr]">
           <div className="grid gap-6">
-            {/* Form content - replace form with div */}
             <div>
               {/* Name */}
               <div className="grid md:grid-cols-3 gap-6 mb-6">
@@ -495,10 +500,6 @@ export default function Register() {
                 {fpStatus === 'enrolled' && (
                   <div className="text-emerald-600 text-4xl">✓</div>
                 )}
-                
-                {fpStatus === 'error' && (
-                  <div className="text-red-600 text-4xl">✗</div>
-                )}
               </div>
             </div>
            
@@ -518,13 +519,11 @@ export default function Register() {
                 <span className={`font-semibold ${
                   fpStatus === 'enrolled' ? 'text-emerald-700' :
                   fpStatus === 'enrolling' ? 'text-blue-600' :
-                  fpStatus === 'error' ? 'text-red-600' :
                   'text-slate-600'
                 }`}>
                   {fpStatus === 'idle' && 'Waiting...'}
                   {fpStatus === 'enrolling' && 'Enrolling...'}
                   {fpStatus === 'enrolled' && 'Enrolled ✓'}
-                  {fpStatus === 'error' && 'Failed'}
                 </span>
               </p>
               {fpMessage && (
@@ -569,8 +568,8 @@ export default function Register() {
         </div>
       </div>
       
-      {/* Popup */}
-      {popupMsg && (
+      {/* Popup - Only for critical errors */}
+      {popupMsg && !fpStatus.includes('enroll') && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
             <p className="text-slate-800 mb-4">{popupMsg}</p>
