@@ -1,8 +1,6 @@
-// Register.jsx
-// This page provides a registration form for new patients,
-// including biometric fingerprint capture (placeholder/demo only).
-
-import React, { useMemo, useState } from 'react'
+// Register.jsx (OPTION 2 Implementation)
+// Keep existing UI but replace demo fingerprint system with real AS608 enrollment
+import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import bgRegister from '../assets/bgreg.png'
 import fingerPrint from '../assets/fingerprint-sensor.png'
@@ -10,17 +8,15 @@ import showPinIcon from '../assets/show.png'
 import hidePinIcon from '../assets/hide.png'
 import Popup from '../components/ErrorPopup'
 
-
 const months = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December'
 ]
 
-
 export default function Register() {
   const nav = useNavigate()
   const [creating, setCreating] = useState(false)
-  const [popupMsg, setPopupMsg] = useState('');
+  const [popupMsg, setPopupMsg] = useState('')
 
   // Name fields
   const [first_name, setFirstName] = useState('')
@@ -31,7 +27,7 @@ export default function Register() {
   const [sex, setSex] = useState('Male')
   const [phone, setPhone] = useState('')
 
-  // Address object state
+  // Address
   const [address, setAddress] = useState({
     street: '',
     barangay: '',
@@ -50,10 +46,13 @@ export default function Register() {
   const [pin, setPin] = useState('')
   const [showPin, setShowPin] = useState(false)
 
-  // Fingerprint (DEMO)
-  const [fpStatus, setFpStatus] = useState('idle') // idle | capturing | enrolled
-  const [fpPreview, setFpPreview] = useState(null)
-  const requireFingerprint = false // demo: allow registration without real enrollment
+  // Fingerprint
+  const [fpStatus, setFpStatus] = useState('idle') 
+  const [fpMessage, setFpMessage] = useState('')
+  const [fingerprintId, setFingerprintId] = useState(null)
+  const [pollTimer, setPollTimer] = useState(null)
+  const [patientId, setPatientId] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   const dob = useMemo(() => {
     const m = String(months.indexOf(month) + 1).padStart(2, '0')
@@ -61,29 +60,107 @@ export default function Register() {
     return `${year}-${m}-${d}`
   }, [month, day, year])
 
-  // Demo fingerprint capture
-  const startFingerprintCapture = async () => {
-    setFpStatus('capturing')
-    setFpPreview(null)
-    await new Promise(r => setTimeout(r, 1200))
-    const fakeTemplate = {
-      vendor: 'demo',
-      version: 1,
-      capturedAt: new Date().toISOString(),
-      data: Math.random().toString(36).slice(2),
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (pollTimer) clearInterval(pollTimer)
     }
-    localStorage.setItem('fingerprintTemplate', JSON.stringify(fakeTemplate))
-    setFpPreview(fingerPrint)
-    setFpStatus('enrolled')
+  }, [pollTimer])
+
+  // Auto redirect on success
+  useEffect(() => {
+    if (fpStatus === 'enrolled') {
+      setPopupMsg("Fingerprint enrolled successfully! Redirecting...")
+      setTimeout(() => {
+        nav('/vitals/weight', { state: { afterCaptureGoTo: '/records' } })
+      }, 1500);
+    }
+  }, [fpStatus])
+
+  // --------------------------------------------
+  // REAL FINGERPRINT ENROLLMENT (Option 2)
+  // --------------------------------------------
+  const startFingerprintCapture = async () => {
+    if (!patientId) {
+      setPopupMsg("Please complete registration first.")
+      return
+    }
+
+    setFpStatus("capturing")
+    setFpMessage("Starting enrollment...")
+    setRetryCount(0)
+
+    try {
+      const res = await fetch("http://localhost:8000/fingerprint/enroll/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ patient_id: patientId })
+      })
+
+      if (!res.ok) {
+        setPopupMsg("Sensor error. Retrying...")
+        return setTimeout(() => startFingerprintCapture(), 1500)
+      }
+
+      const data = await res.json()
+      setFingerprintId(data.fingerprint_id)
+      setFpMessage("Place your finger on the sensor")
+
+      // begin polling
+      const timer = setInterval(() => pollFingerprintStatus(data.fingerprint_id), 1000)
+      setPollTimer(timer)
+
+    } catch (err) {
+      setPopupMsg("Network error. Retrying...")
+      setTimeout(() => startFingerprintCapture(), 1500)
+    }
   }
 
+  const pollFingerprintStatus = async (fpId) => {
+    try {
+      const res = await fetch(
+        `http://localhost:8000/fingerprint/status/?fingerprint_id=${fpId}&patient_id=${patientId}`,
+        { credentials: "include" }
+      )
+
+      const data = await res.json()
+
+      if (data.status === "place_finger") {
+        setFpStatus("capturing")
+        setFpMessage(data.message || "Place your finger")
+
+      } else if (data.status === "remove_finger") {
+        setFpMessage(data.message || "Remove finger...")
+
+      } else if (data.status === "enrolled") {
+        clearInterval(pollTimer)
+        setPollTimer(null)
+        setFpStatus("enrolled")
+        setFpMessage("Fingerprint enrollment complete!")
+
+      } else if (data.status === "error") {
+        clearInterval(pollTimer)
+        setPollTimer(null)
+
+        const nextRetry = retryCount + 1
+        setRetryCount(nextRetry)
+        setFpMessage(`Retrying... (Attempt ${nextRetry + 1})`)
+
+        setTimeout(() => startFingerprintCapture(), 1500)
+      }
+
+    } catch (err) {
+      console.log("Polling error but continuing...")
+    }
+  }
+
+  // --------------------------------------------
+  // SUBMIT FORM → REGISTER → LOGIN → ENABLE FP
+  // --------------------------------------------
   const submit = async (e) => {
     e.preventDefault()
 
-    if (requireFingerprint && fpStatus !== 'enrolled') {
-      setPopupMsg('Please capture fingerprint before registering.')
-      return
-    }
     if (!first_name.trim() || !last_name.trim()) {
       setPopupMsg('Please enter first and last name.')
       return
@@ -100,7 +177,6 @@ export default function Register() {
       contact: phone.trim(),
       street: address.street.trim(),
       barangay: address.barangay.trim(),
-      // address: `${address.street}, ${address.barangay}, ${address.city}, ${address.region}, ${address.country}`,
       username: username.trim(),
       pin
     }
@@ -117,12 +193,12 @@ export default function Register() {
       if (!registerRes.ok) {
         const err = await registerRes.json().catch(() => ({}))
         const message = err.username?.[0] || err.username || err.error || err.detail || err.message || "Failed to register patient"
-        setPopupMsg(message.charAt(0).toUpperCase() + message.slice(1))
+        setPopupMsg(message)
         setCreating(false)
         return
-      } 
+      }
 
-      // Auto-login
+      // Login
       const loginRes = await fetch('http://localhost:8000/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,27 +213,35 @@ export default function Register() {
       if (!loginRes.ok) {
         setPopupMsg("Registration successful but login failed. Please login manually.")
         setCreating(false)
-        nav('/login')
-        return
+        return nav('/login')
       }
 
       const loginData = await loginRes.json().catch(() => ({}))
-      sessionStorage.setItem('isAuthenticated', 'true')
 
-      if (loginData.patient_id) {
-        sessionStorage.setItem('patient_id', loginData.patient_id)
-      } else {
-        console.warn("Login successful but no patient_id found in response payload. Check backend /login/ response.")
+      if (!loginData.patient_id) {
+        setPopupMsg("No patient ID returned.")
+        setCreating(false)
+        return
       }
 
+      // Save for fingerprint
+      sessionStorage.setItem('isAuthenticated', 'true')
+      sessionStorage.setItem('patient_id', loginData.patient_id)
+      setPatientId(loginData.patient_id)
+
+      setPopupMsg("Account created! You may now capture fingerprint.")
+
       setCreating(false)
-      nav('/vitals/weight', { state: { afterCaptureGoTo: '/records' } })
+
     } catch (err) {
-      setPopupMsg("Network error. Please try again.");
+      setPopupMsg("Network error. Please try again.")
       setCreating(false)
     }
   }
 
+  // --------------------------------------------
+  // RENDER
+  // --------------------------------------------
   return (
     <section
       className="relative min-h-screen flex items-center justify-center px-4 py-16 bg-cover bg-center"
@@ -171,8 +255,10 @@ export default function Register() {
         </h2>
 
         <div className="grid gap-8 md:grid-cols-[2fr,1fr]">
+          {/* FORM */}
           <form onSubmit={submit} className="grid gap-6">
-            {/* Name */}
+
+            {/* NAME */}
             <div className="grid md:grid-cols-3 gap-6">
               <div>
                 <label className="text-sm font-semibold text-slate-700">First Name</label>
@@ -196,20 +282,20 @@ export default function Register() {
                 <label className="text-sm font-semibold text-slate-700">Last Name</label>
                 <input
                   value={last_name}
-                  onChange={e => setLastName(e.target.value.replace(/[^A-Za-z ]/g, ''))}                
+                  onChange={e => setLastName(e.target.value.replace(/[^A-Za-z ]/g, ''))}
                   required
                   className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
                 />
               </div>
             </div>
 
-            {/* Sex / Birthdate */}
+            {/* SEX / DOB */}
             <div className="grid md:grid-cols-3 gap-6">
               <div>
                 <label className="text-sm font-semibold text-slate-700">Sex</label>
                 <select
                   value={sex}
-                  onChange={e=>setSex(e.target.value)}
+                  onChange={e => setSex(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
                 >
                   <option>Male</option>
@@ -221,21 +307,21 @@ export default function Register() {
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   <select
                     value={month}
-                    onChange={e=>setMonth(e.target.value)}
+                    onChange={e => setMonth(e.target.value)}
                     className="rounded-xl border border-slate-300 px-3 py-2.5"
                   >
                     {months.map(m => <option key={m}>{m}</option>)}
                   </select>
                   <select
                     value={day}
-                    onChange={e=>setDay(Number(e.target.value))}
+                    onChange={e => setDay(Number(e.target.value))}
                     className="rounded-xl border border-slate-300 px-3 py-2.5"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d}>{d}</option>)}
                   </select>
                   <select
                     value={year}
-                    onChange={e=>setYear(Number(e.target.value))}
+                    onChange={e => setYear(Number(e.target.value))}
                     className="rounded-xl border border-slate-300 px-3 py-2.5"
                   >
                     {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(y => (
@@ -246,7 +332,7 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Contact / Address */}
+            {/* CONTACT / ADDRESS */}
             <div className="grid md:grid-cols-[1fr,2fr] gap-2 items-start md:items-center">
               {/* Phone */}
               <div>
@@ -259,11 +345,11 @@ export default function Register() {
                 />
               </div>
 
-              {/* Address Section */}
+              {/* Address */}
               <div className="md:col-span-2">
                 <label className="text-sm font-semibold text-slate-700 block mb-2">Address</label>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
                   {/* Street */}
                   <div>
                     <input
@@ -278,42 +364,39 @@ export default function Register() {
 
                   {/* Barangay */}
                   <div>
-                  <select
-                    value={address.barangay}
-                    onChange={e => setAddress({ ...address, barangay: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
-                    required
-                  >
-                    <option value="">Select Brgy.</option>
+                    <select
+                      value={address.barangay}
+                      onChange={e => setAddress({ ...address, barangay: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                      required
+                    >
+                      <option value="">Select Brgy.</option>
 
-                    <option value="3">Brgy. 587A</option>
+                      <option value="3">Brgy. 587A</option>
 
-                    {/* Existing generated options */}
-                    {Array.from({ length: 648 - 587 + 1 }, (_, i) => 587 + i).map(brgy => (
-                      <option key={brgy} value={brgy - 586}>
-                        Brgy. {brgy}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                      {Array.from({ length: 648 - 587 + 1 }, (_, i) => 587 + i).map(brgy => (
+                        <option key={brgy} value={brgy - 586}>
+                          Brgy. {brgy}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  {/* City / Region / Country on same row */}
                   <div className="grid grid-cols-3 gap-4 col-span-2">
-                    {/* City */}
                     <input
                       type="text"
                       value="Manila"
                       readOnly
                       className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
                     />
-                    {/* Region */}
+
                     <input
                       type="text"
                       value="NCR"
                       readOnly
                       className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
                     />
-                    {/* Country */}
+
                     <input
                       type="text"
                       value="Philippines"
@@ -321,35 +404,35 @@ export default function Register() {
                       className="rounded-xl border border-slate-300 px-4 py-2.5 bg-gray-100 cursor-not-allowed"
                     />
                   </div>
+
                 </div>
               </div>
             </div>
 
-
-            {/* Username / PIN */}
+            {/* USERNAME / PIN */}
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="text-sm font-semibold text-slate-700">Username</label>
                 <input
                   value={username}
-                  onChange={e=>setUsername(e.target.value)}
+                  onChange={e => setUsername(e.target.value)}
                   required
                   className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-2.5"
                 />
               </div>
+
               <div>
                 <label className="text-sm font-semibold text-slate-700">4-Digit PIN</label>
                 <div className="relative mt-2">
                   <input
                     value={pin}
-                    onChange={e=>setPin(e.target.value.replace(/\D/g, '').slice(0,4))}
-                    required
+                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0,4))}
                     maxLength={4}
                     inputMode="numeric"
                     pattern="\d{4}"
                     type={showPin ? 'text' : 'password'}
+                    required
                     className="mt-0 w-full rounded-xl border border-slate-300 px-4 py-2.5 pr-12"
-                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -359,7 +442,7 @@ export default function Register() {
                     <img
                       src={showPin ? hidePinIcon : showPinIcon}
                       alt="toggle pin"
-                      className="h-5 w-5 object-contain select-none pointer-events-none"
+                      className="h-5 w-5 object-contain select-none"
                     />
                   </button>
                 </div>
@@ -369,57 +452,60 @@ export default function Register() {
             <div className="text-right">
               <button
                 type="submit"
-                disabled={creating || (requireFingerprint && fpStatus !== 'enrolled')}
+                disabled={creating}
                 className="mt-6 bg-[#6ec1af] hover:bg-emerald-800/70 disabled:opacity-60 text-white font-bold px-8 py-3 rounded-xl shadow-md"
               >
                 {creating ? 'Creating Account...' : 'Register'}
               </button>
             </div>
+
           </form>
 
-          {/* Biometric Card (Demo Only) */}
+          {/* BIOMETRIC */}
           <aside className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
             <h3 className="text-lg font-extrabold text-emerald-800">Biometric Enrollment</h3>
             <p className="mt-1 text-sm text-emerald-900/80">
-              Capture the patient’s fingerprint. Placeholder only — will wire up the sensor later.
+              Capture the patient’s fingerprint.
             </p>
+
             <div className="mt-5 grid place-items-center">
               <div className="h-32 w-32 rounded-full bg-white border-2 border-emerald-300 grid place-items-center overflow-hidden">
-                {fpStatus === 'capturing' && <div className="h-8 w-8 animate-ping rounded-full bg-emerald-400" />}
-                {fpStatus === 'idle' && <div className="text-emerald-700/80 text-sm">No scan</div>}
-                {fpStatus === 'enrolled' && fpPreview && (
-                  <img src={fpPreview} alt="Fingerprint preview" className="h-full w-full object-contain" />
+                {fpStatus === 'capturing' && (
+                  <div className="h-8 w-8 animate-ping rounded-full bg-emerald-400" />
+                )}
+
+                {fpStatus === 'idle' && (
+                  <div className="text-emerald-700/80 text-sm">No scan</div>
+                )}
+
+                {fpStatus === 'enrolled' && (
+                  <img src={fingerPrint} className="h-full w-full object-contain" alt="" />
                 )}
               </div>
             </div>
+
             <div className="mt-4">
-              <p className="text-sm">
-                Status:{' '}
-                <span className={`font-semibold ${
-                  fpStatus === 'enrolled' ? 'text-emerald-700' :
-                  fpStatus === 'capturing' ? 'text-emerald-600' : 'text-slate-600'
-                }`}>
-                  {fpStatus === 'idle' && 'Not enrolled'}
-                  {fpStatus === 'capturing' && 'Capturing…'}
-                  {fpStatus === 'enrolled' && 'Enrolled'}
-                </span>
-              </p>
+              <p className="text-sm font-semibold text-emerald-900">{fpMessage}</p>
             </div>
+
             <div className="mt-5 flex flex-wrap gap-3">
               {fpStatus !== 'capturing' && (
                 <button
                   type="button"
                   onClick={startFingerprintCapture}
-                  className="rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-4 py-2"
+                  disabled={!patientId}
+                  className="rounded-xl bg-[#6ec1af] hover:bg-emerald-800/70 text-white font-semibold px-4 py-2 disabled:opacity-50"
                 >
                   {fpStatus === 'enrolled' ? 'Re-capture' : 'Start Capture'}
                 </button>
               )}
+
               {fpStatus === 'capturing' && (
-                <button type="button" disabled className="rounded-xl bg-[#6ec1af] text-white font-semibold px-4 py-2">
+                <button disabled className="rounded-xl bg-[#6ec1af] text-white font-semibold px-4 py-2">
                   Capturing…
                 </button>
               )}
+
               {fpStatus === 'enrolled' && (
                 <div className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-emerald-800 text-sm">
                   Fingerprint saved
@@ -427,8 +513,10 @@ export default function Register() {
               )}
             </div>
           </aside>
+
         </div>
       </div>
+
       {popupMsg && <Popup message={popupMsg} onClose={() => setPopupMsg('')} />}
     </section>
   )
