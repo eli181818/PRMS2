@@ -1203,8 +1203,6 @@ def get_archived_patients(request):
         'patient_id': p.patient_id,
         'name': f"{p.first_name} {p.last_name}",
         'archived_at': p.archived_at,
-        'archived_by': p.archived_by.name if p.archived_by else None,
-        'archive_reason': p.archive_reason,
     } for p in archived]
     
     return Response(data)
