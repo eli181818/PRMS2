@@ -1,6 +1,11 @@
 // Register.jsx - Continuous fingerprint enrollment with auto-retry
 import React, { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import bgRegister from '../assets/bgreg.png'
+import fingerPrint from '../assets/fingerprint-sensor.png'
+import showPinIcon from '../assets/show.png'
+import hidePinIcon from '../assets/hide.png'
+import Popup from '../components/ErrorPopup'
 
 const months = [
   'January','February','March','April','May','June',
@@ -270,7 +275,11 @@ export default function Register() {
   }
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-4 py-16 bg-gradient-to-br from-emerald-50 to-teal-100">
+    <section
+      className="relative min-h-screen flex items-center justify-center px-4 py-16 bg-cover bg-center"
+      style={{ backgroundImage: `url(${bgRegister})` }}
+    >
+      <div className="absolute inset-0 bg-emerald-900/40 backdrop-blur-sm" />
       <div className="relative w-full max-w-5xl bg-white rounded-3xl shadow-xl p-6 md:p-10">
         <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-emerald-700 mb-8">
           Register
@@ -442,10 +451,13 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setShowPin(s => !s)}
-                      disabled={creating}
-                      className="absolute inset-y-0 right-2 my-auto h-9 w-9 grid place-items-center rounded-md hover:bg-slate-100 disabled:opacity-50"
+                      className="absolute inset-y-0 right-2 my-auto h-9 w-9 grid place-items-center rounded-md hover:bg-slate-100"
                     >
-                      {showPin ? '🙈' : '👁️'}
+                      <img
+                        src={showPin ? hidePinIcon : showPinIcon}
+                        alt="toggle pin"
+                        className="h-5 w-5 object-contain select-none pointer-events-none"
+                      />
                     </button>
                   </div>
                 </div>
@@ -469,7 +481,7 @@ export default function Register() {
             <p className="mt-1 text-sm text-emerald-900/80">
               Fingerprint enrollment required
             </p>
-           
+          
             <div className="mt-5 grid place-items-center">
               <div className="h-32 w-32 rounded-full bg-white border-2 border-emerald-300 grid place-items-center overflow-hidden relative">
                 {fpStatus === 'idle' && (
@@ -502,7 +514,7 @@ export default function Register() {
                 )}
               </div>
             </div>
-           
+          
             {/* Progress Bar */}
             {fpStatus === 'enrolling' && (
               <div className="mt-4 w-full h-2 rounded-full bg-slate-200 overflow-hidden">
@@ -512,25 +524,27 @@ export default function Register() {
                 />
               </div>
             )}
-           
+          
             <div className="mt-4">
               <p className="text-sm">
                 Status:{' '}
                 <span className={`font-semibold ${
                   fpStatus === 'enrolled' ? 'text-emerald-700' :
                   fpStatus === 'enrolling' ? 'text-blue-600' :
+                  fpStatus === 'cancelled' ? 'text-orange-600' :
                   'text-slate-600'
                 }`}>
-                  {fpStatus === 'idle' && 'Waiting...'}
-                  {fpStatus === 'enrolling' && 'Enrolling...'}
-                  {fpStatus === 'enrolled' && 'Enrolled ✓'}
+                  {fpStatus === 'idle' && 'Not enrolled'}
+                  {fpStatus === 'enrolling' && 'Capturing…'}
+                  {fpStatus === 'enrolled' && 'Enrolled'}
+                  {fpStatus === 'cancelled' && 'Cancelled'}
                 </span>
               </p>
               {fpMessage && (
                 <p className="text-xs text-emerald-800 mt-2">{fpMessage}</p>
               )}
             </div>
-           
+          
             <div className="mt-5">
               {fpStatus === 'enrolling' && (
                 <div>
@@ -550,11 +564,11 @@ export default function Register() {
                   </button>
                 </div>
               )}
-             
+            
               {fpStatus === 'enrolled' && (
                 <div className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-emerald-800 text-sm flex items-center gap-2">
                   <span>✓</span>
-                  <span>Enrollment successful</span>
+                  <span>Fingerprint saved</span>
                 </div>
               )}
 
@@ -567,21 +581,6 @@ export default function Register() {
           </aside>
         </div>
       </div>
-      
-      {/* Popup - Only for critical errors */}
-      {popupMsg && !fpStatus.includes('enroll') && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
-            <p className="text-slate-800 mb-4">{popupMsg}</p>
-            <button
-              onClick={() => setPopupMsg('')}
-              className="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
     </section>
   )
 }
