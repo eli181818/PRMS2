@@ -421,7 +421,7 @@ export default function PatientRecords() {
                   <div className="rounded-2xl border p-5" style={{ background: BRAND.bg, color: BRAND.text, borderColor: BRAND.border }}>
                     <div className="text-sm opacity-90">Pulse Rate</div>
                     <div className="mt-2 text-3xl font-extrabold tabular-nums">
-                      {p.latest_vitals?.heart_rate ?? '—'}
+                      {p.latest_vitals?.pulse_rate ?? '—'}
                     </div>
                     <div className="mt-1 text-xs opacity-80">BPM</div>
                   </div>
@@ -565,7 +565,7 @@ export default function PatientRecords() {
                   <div className="rounded-2xl border p-5" style={{ background: BRAND.bg, color: BRAND.text, borderColor: BRAND.border }}>
                     <div className="text-sm opacity-90">Pulse Rate</div>
                     <div className="mt-2 text-3xl font-extrabold tabular-nums">
-                      {latestVitals?.heart_rate ?? '—'}
+                      {latestVitals?.pulse_rate ?? '—'}
                     </div>
                     <div className="mt-1 text-xs opacity-80">BPM</div>
                   </div>
@@ -654,7 +654,7 @@ export default function PatientRecords() {
                           <td className="px-4 py-3">{r.date}</td>
                           <td className="px-4 py-3">{r.height ?? '—'}</td>
                           <td className="px-4 py-3">{r.weight ?? '—'}</td>
-                          <td className="px-4 py-3">{r.heart_rate ? `${r.heart_rate} bpm` : '—'}</td>
+                          <td className="px-4 py-3">{r.pulse_rate ? `${r.pulse_rate} bpm` : '—'}</td>
                           <td className="px-4 py-3">{r.oxygen_saturation ?? '—'}</td>
                           <td className="px-4 py-3">{r.temperature ?? '—'}</td>
                           <td className="px-4 py-3">{r.bmi ?? '—'}</td>

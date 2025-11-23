@@ -354,7 +354,7 @@ def delete_fingerprint(request, patient_id):
 
 latest_vitals = {
     "temperature": None,
-    "heart_rate": None,
+    "pulse_rate": None,
     "spo2": None,
     "height": None,
 }
@@ -405,7 +405,7 @@ def start_vitals(request):
         # Update global vitals cache
         latest_vitals.update({
             "temperature": data.get("temperature"),
-            "heart_rate": data.get("heart_rate"),
+            "pulse_rate": data.get("pulse_rate"),
             "spo2": data.get("spo2"),
             "height": data.get("height")
         })
@@ -445,7 +445,7 @@ def fetch_temperature(request):
 
 
 @api_view(['GET'])
-def fetch_heart_rate(request):
+def fetch_pulse_rate(request):
     """Fetch latest heart rate from Arduino"""
     ser = get_serial()
     if ser is None:
@@ -458,11 +458,11 @@ def fetch_heart_rate(request):
                 if line:
                     try:
                         data = json.loads(line)
-                        heart_rate = data.get("heart_rate")
-                        if heart_rate is not None:
-                            latest_vitals["heart_rate"] = int(heart_rate)
-                            print(f"Heart Rate: {heart_rate} bpm")
-                            return Response({"heart_rate": heart_rate})
+                        pulse_rate = data.get("pulse_rate")
+                        if pulse_rate is not None:
+                            latest_vitals["pulse_rate"] = int(pulse_rate)
+                            print(f"Heart Rate: {pulse_rate} bpm")
+                            return Response({"pulse_rate": pulse_rate})
                     except json.JSONDecodeError:
                         pass
             
@@ -611,7 +611,7 @@ def update_vitals(request, id):
 @api_view(['POST'])
 def receive_vital_signs(request):
     """
-    Handles vital sign data (weight, height, heart_rate, etc.)
+    Handles vital sign data (weight, height, pulse_rate, etc.)
     Updates existing record for today if incomplete, or creates new one.
     """
     data = request.data
@@ -655,7 +655,7 @@ def receive_vital_signs(request):
             all_filled = all([
                 vital_signs.weight,
                 vital_signs.height,
-                vital_signs.heart_rate,
+                vital_signs.pulse_rate,
                 vital_signs.temperature,
                 vital_signs.oxygen_saturation,
                 vital_signs.blood_pressure,
@@ -672,7 +672,7 @@ def receive_vital_signs(request):
         )
 
     # --- Update only the provided fields ---
-    for field in ['heart_rate', 'temperature', 'oxygen_saturation', 'weight', 'height', 'blood_pressure']:
+    for field in ['pulse_rate', 'temperature', 'oxygen_saturation', 'weight', 'height', 'blood_pressure']:
         if field in data and data[field] is not None:
             setattr(vital_signs, field, data[field])
 
@@ -681,7 +681,7 @@ def receive_vital_signs(request):
     
     all_vitals_complete = all([
         vital_signs.blood_pressure,
-        vital_signs.heart_rate,
+        vital_signs.pulse_rate,
         vital_signs.temperature,
         vital_signs.oxygen_saturation,
         vital_signs.weight,
@@ -713,7 +713,7 @@ def receive_vital_signs(request):
         "data": {
             "id": vital_signs.id,
             "patient_id": patient.patient_id,
-            "heart_rate": vital_signs.heart_rate,
+            "pulse_rate": vital_signs.pulse_rate,
             "temperature": vital_signs.temperature,
             "oxygen_saturation": vital_signs.oxygen_saturation,
             "weight": vital_signs.weight,
@@ -850,7 +850,7 @@ def get_patient_vitals(request):
                 bmi_value = round(latest_vital.weight / (height_m * height_m), 1)
             
             latest_data = {
-                'heart_rate': latest_vital.heart_rate,
+                'pulse_rate': latest_vital.pulse_rate,
                 'temperature': latest_vital.temperature,
                 'spo2': latest_vital.oxygen_saturation,
                 'blood_pressure': None,  # Add blood pressure fields to your model if needed
@@ -865,7 +865,7 @@ def get_patient_vitals(request):
             history_data.append({
                 'id': vital.id,
                 'date': vital.date_time_recorded.strftime('%Y-%m-%d %H:%M'),
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'blood_pressure': None,  # Add blood pressure fields to your model if needed
                 'temperature': vital.temperature,
                 'spo2': vital.oxygen_saturation,
@@ -911,7 +911,7 @@ def get_patient_vitals_by_id(request, patient_id): # <-- NEW FUNCTION
             
             # Map latest vitals data
             latest_data = {
-                'heart_rate': latest_vital.heart_rate,
+                'pulse_rate': latest_vital.pulse_rate,
                 'temperature': latest_vital.temperature,
                 'oxygen_saturation': latest_vital.oxygen_saturation,
                 'blood_pressure': latest_vital.blood_pressure, # ADDED: Ensure BP is included
@@ -931,7 +931,7 @@ def get_patient_vitals_by_id(request, patient_id): # <-- NEW FUNCTION
             history_data.append({
                 'id': vital.id,
                 'date': vital.date_time_recorded.strftime('%Y-%m-%d %H:%M'), 
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'blood_pressure': vital.blood_pressure,
                 'temperature': vital.temperature,
                 'oxygen_saturation': vital.oxygen_saturation,
@@ -1111,7 +1111,7 @@ def get_all_patients(request):
                 bmi_value = round(vital.weight / (height_m * height_m), 1)
 
             latest_vital_data = {
-                'heart_rate': vital.heart_rate,
+                'pulse_rate': vital.pulse_rate,
                 'temperature': vital.temperature,
                 'oxygen_saturation': vital.oxygen_saturation,
                 'blood_pressure': vital.blood_pressure,
@@ -1303,7 +1303,7 @@ def print_patient_vitals(request, patient_id=None):
                 "weight": f"{latest_vital.weight} kg" if latest_vital.weight else "—",
                 "height": f"{latest_vital.height} cm" if latest_vital.height else "—",
                 "bmi": f"{bmi_value} kg/m²" if bmi_value else "—",
-                "heart_rate": f"{latest_vital.heart_rate} bpm" if latest_vital.heart_rate else "—",
+                "pulse_rate": f"{latest_vital.pulse_rate} bpm" if latest_vital.pulse_rate else "—",
                 "temperature": f"{latest_vital.temperature} °C" if latest_vital.temperature else "—",
                 "oxygen_saturation": f"{latest_vital.oxygen_saturation} %" if latest_vital.oxygen_saturation else "—",
                 "blood_pressure": f"{latest_vital.blood_pressure} mmHg" if latest_vital.blood_pressure else "—"
@@ -1373,10 +1373,10 @@ def get_priority_reasons(vital_signs):
         elif vital_signs.temperature <= 35:
             reasons.append("Hypothermia")
     
-    if vital_signs.heart_rate:
-        if vital_signs.heart_rate > 100:
+    if vital_signs.pulse_rate:
+        if vital_signs.pulse_rate > 100:
             reasons.append("Elevated heart rate")
-        elif vital_signs.heart_rate < 60:
+        elif vital_signs.pulse_rate < 60:
             reasons.append("Low heart rate")
     
     if vital_signs.oxygen_saturation:
@@ -1464,7 +1464,7 @@ def generate_vitals_pdf(print_data):
     y = draw_lr("Weight", measurements["weight"], y)
     y = draw_lr("Height", measurements["height"], y)
     y = draw_lr("BMI", measurements["bmi"], y)
-    y = draw_lr("Pulse Rate", measurements["heart_rate"], y)
+    y = draw_lr("Pulse Rate", measurements["pulse_rate"], y)
     y = draw_lr("SpO2", measurements["oxygen_saturation"], y)
     y = draw_lr("Temperature", measurements["temperature"], y)
     y = draw_lr("Blood Pressure", measurements["blood_pressure"], y)
@@ -1639,7 +1639,7 @@ Age: {age_str}
 ID: {patient.patient_id}
 
 TEMP: {latest_vital.temperature or '—'} °C
-PULSE: {latest_vital.heart_rate or '—'} bpm
+PULSE: {latest_vital.pulse_rate or '—'} bpm
 SPO2: {latest_vital.oxygen_saturation or '—'} %
 HEIGHT: {latest_vital.height or '—'} cm
 WEIGHT: {latest_vital.weight or '—'} kg
@@ -1724,7 +1724,7 @@ Measurements
 Weight          {vitals.weight or "—"} kg
 Height          {vitals.height or "—"} cm
 BMI             {bmi_str} kg/m²
-Heart Rate      {vitals.heart_rate or "—"} bpm
+Heart Rate      {vitals.pulse_rate or "—"} bpm
 SpO2            {vitals.oxygen_saturation or "—"} %
 Temp            {vitals.temperature or "—"} °C
 BP              {vitals.blood_pressure or "—"} mmHg
