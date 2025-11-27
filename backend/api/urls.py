@@ -1,4 +1,5 @@
 from django.urls import path, include
+from . import views
 from rest_framework.routers import DefaultRouter
 from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login, 
                     get_vitals, receive_vital_signs, update_vitals, get_all_patients, 
@@ -9,11 +10,8 @@ from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login,
                     check_enrollment_status, delete_fingerprint,
                     start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan,
                     print_patient_vitals, print_queue_ticket, print_to_pos58, print_vitals_and_queue_pos58,
-                    update_queue_display, get_current_queue_for_display, fetch_weight
+                    update_queue_display, get_current_queue_for_display
                 )
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from . import views
 
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
@@ -43,7 +41,7 @@ urlpatterns = [
     path('fetch_heart_rate/', views.fetch_pulse_rate, name='fetch_heart_rate'),
     path('fetch_spo2/', views.fetch_spo2, name='fetch_spo2'),
     path('fetch_height/', views.fetch_height, name='fetch_height'),
-        path('fetch_weight/', views.fetch_weight, name='fetch_weight'),
+    path('fetch_weight/', views.fetch_weight, name='fetch_weight'),
     
     path('fingerprint/enroll/', start_fingerprint_enrollment, name='start_fingerprint_enrollment'),
     path('fingerprint/status/', check_enrollment_status, name='check_enrollment_status'),
@@ -56,7 +54,7 @@ urlpatterns = [
     path('print/vitals/<str:patient_id>/', views.print_patient_vitals, name='print_patient_vitals'),
     path('print/queue-ticket/', views.print_queue_ticket, name='print_queue_ticket'),
     path('print-vitals/<str:patient_id>/', print_patient_vitals, name='print_vitals'),
-    path('print-vitals/', print_patient_vitals, name='print_vitals_post'),  # POST version
+    path('print-vitals/', print_patient_vitals, name='print_vitals_post'),  
     path('print-queue-ticket/', print_queue_ticket, name='print_queue_ticket'),
     path("print-pos58/", print_to_pos58, name='print_to_pos58'),
     path("print-vitals-and-queue/", print_vitals_and_queue_pos58),

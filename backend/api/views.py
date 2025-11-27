@@ -360,6 +360,7 @@ latest_vitals = {
     "heart_rate": None,
     "spo2": None,
     "height": None,
+    "weight": None
 }
 
 
@@ -410,7 +411,8 @@ def start_vitals(request):
             "temperature": data.get("temperature"),
             "heart_rate": data.get("heart_rate"),
             "spo2": data.get("spo2"),
-            "height": data.get("height")
+            "height": data.get("height"),
+            "weight": data.get("weight")
         })
 
         print("Vitals received:", latest_vitals)
