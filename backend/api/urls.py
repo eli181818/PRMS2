@@ -9,7 +9,7 @@ from .views import (PatientViewSet, VitalSignsViewSet, QueueViewSet, login,
                     check_enrollment_status, delete_fingerprint,
                     start_fingerprint_scan, check_fingerprint_match, stop_fingerprint_scan,
                     print_patient_vitals, print_queue_ticket, print_to_pos58, print_vitals_and_queue_pos58,
-                    update_queue_display, get_current_queue_for_display
+                    update_queue_display, get_current_queue_for_display, fetch_weight
                 )
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -43,6 +43,7 @@ urlpatterns = [
     path('fetch_heart_rate/', views.fetch_pulse_rate, name='fetch_heart_rate'),
     path('fetch_spo2/', views.fetch_spo2, name='fetch_spo2'),
     path('fetch_height/', views.fetch_height, name='fetch_height'),
+        path('fetch_weight/', views.fetch_weight, name='fetch_weight'),
     
     path('fingerprint/enroll/', start_fingerprint_enrollment, name='start_fingerprint_enrollment'),
     path('fingerprint/status/', check_enrollment_status, name='check_enrollment_status'),

@@ -357,7 +357,7 @@ def delete_fingerprint(request, patient_id):
 
 latest_vitals = {
     "temperature": None,
-    "pulse_rate": None,
+    "heart_rate": None,
     "spo2": None,
     "height": None,
 }
@@ -408,7 +408,7 @@ def start_vitals(request):
         # Update global vitals cache
         latest_vitals.update({
             "temperature": data.get("temperature"),
-            "pulse_rate": data.get("pulse_rate"),
+            "heart_rate": data.get("heart_rate"),
             "spo2": data.get("spo2"),
             "height": data.get("height")
         })
@@ -520,6 +520,32 @@ def fetch_height(request):
                             latest_vitals["height"] = int(height)
                             print(f"Height: {height} cm")
                             return Response({"height": height})
+                    except json.JSONDecodeError:
+                        pass
+            
+            return Response({"error": "No data available"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+def fetch_weight(request):
+    """Fetch latest weight from Arduino"""
+    ser = get_serial()
+    if ser is None:
+        return Response({"error": "Connection error"}, status=500)
+    
+    try:
+        with _serial_lock:
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    try:
+                        data = json.loads(line)
+                        weight = data.get("weight")
+                        if weight is not None:
+                            latest_vitals["weight"] = float(weight)
+                            print(f"⚖️ Weight: {weight} kg")
+                            return Response({"weight": weight})
                     except json.JSONDecodeError:
                         pass
             
@@ -659,7 +685,7 @@ def receive_vital_signs(request):
                 vital_signs.weight,
                 vital_signs.height,
                 vital_signs.pulse_rate,
-                vital_signs.temperature,
+                vital_signs.temperature5,
                 vital_signs.oxygen_saturation,
                 vital_signs.blood_pressure,
                 
